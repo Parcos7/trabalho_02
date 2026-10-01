@@ -92,33 +92,28 @@ def cadastrar_ativo():
                 case TipoAtivo.NOTEBOOK.value:
                     ram = int(input("Digite a quantidade de memória RAM (GB): "))
                     novo_ativo = Notebook(id_num, ativo_host, ativo_res, ativo_loc, ram)
-                    novo_ativo.tipo = "NOTEBOOK"
                     break
                 
                 case TipoAtivo.SERVIDOR.value:
                     so = input("Digite o Sistema Operativo do Servidor: ").strip()
                     novo_ativo = Servidor(id_num, ativo_host, ativo_res, ativo_loc, so)
-                    novo_ativo.tipo = "SERVIDOR"
                     break
                 
                 case TipoAtivo.ROTEADOR.value:
                     fw = input("O firmware está atualizado? (S/N): ").strip().upper()
                     fw_atualizado = True if fw == 'S' else False
                     novo_ativo = Roteador(id_num, ativo_host, ativo_res, ativo_loc, fw_atualizado)
-                    novo_ativo.tipo = "ROTEADOR"
                     break
                 
                 case TipoAtivo.DESKTOP.value:
                     ram = int(input("Digite a quantidade de memória RAM (GB) da máquina base: "))
                     novo_ativo = Desktop(id_num, ativo_host, ativo_res, ativo_loc, ram) 
-                    novo_ativo.tipo = "Desktop"
                     break
                 case _:
                     print("\nErro: Número fora da lista.\n")
                 
         except ValueError:
             print("\nErro: Digite um dos números da lista ou garanta que os dados extra estão corretos.\n")
-
 
     db_inventario[id_str] = novo_ativo.__dict__
     
