@@ -1,3 +1,14 @@
+# =====================================================================
+# NOTA DE NOMENCLATURA PESSOAL:
+# 'db'  -> Simplificação de "base de dados"
+# 'arq' -> Simplificação de "ficheiros" ou "ficheiro"
+# 'res' -> Simplificação de "Responsavel"
+# 'loc' -> Simplificação de "Localidade"
+# 'fw' -> Simplificação de "firmware"
+# 'so' -> Simplificação de "Sistema Operacional"
+# =====================================================================
+
+
 from abc import ABC, abstractmethod
 
 class Equipamento(ABC):
