@@ -11,7 +11,7 @@ class TipoAtivo(Enum):
     NOTEBOOK = 1
     SERVIDOR = 2
     ROTEADOR = 3
-    BANCO_DE_DADOS = 4
+    DESKTOP = 4
 
 nome_db = 'inventario_db.json'
 
