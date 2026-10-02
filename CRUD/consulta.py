@@ -2,29 +2,14 @@
 # NOTA DE NOMENCLATURA PESSOAL:
 # 'db'  -> Simplificação de "banco_de_dados" 
 # 'arq' -> Simplificação de "arquivos" ou "arquivo"
+# 'obj' -> Simplificação de "Objeto"
 # =====================================================================
 
 from persistencia import ler_db
-from ativos import Servidor, Roteador, Notebook, Desktop
+from ativos import Equipamento
 
 db_inventario = ler_db()
 
-def dados_ativos_consulta(tipo_ativo, dados_ativos):
-    ativo_obj = None
-    match tipo_ativo:
-        case "NOTEBOOK":
-            ativo_obj = Notebook(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('qnt_ram', 0))
-            return ativo_obj
-        case "SERVIDOR":
-            ativo_obj = Servidor(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('sistema_operacional', 'N/A'))
-            return ativo_obj
-        case "ROTEADOR":
-            ativo_obj = Roteador(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('firmware_atualizado', False))
-            return ativo_obj
-        case "DESKTOP": 
-            ativo_obj = Desktop(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('qnt_ram', 0))
-            return ativo_obj
-        
 def consultar_todosA():
     db_inventario = ler_db()
     
@@ -37,12 +22,11 @@ def consultar_todosA():
     for chave, dados in db_inventario.items():
         tipo = dados.get('tipo')
         
-        ativo_obj = dados_ativos_consulta(tipo, dados)
+        ativo_obj = Equipamento.fabricar_ativo(tipo, dados)
 
         if ativo_obj:
             ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])
             
-            # Polimorfismo: O objeto chama sua própria função de exibir
             ativo_obj.exibir_informacoes()
             print(f"Status de Risco: {ativo_obj.calcular_risco()}")
             
@@ -53,7 +37,6 @@ def consultar_todosA():
                 for vul in ativo_obj.vulnerabilidades:
                     print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {vul['status']}")
             
-            # Linha separadora visual entre um equipamento e outro
             print("=" * 45)
     
 
@@ -70,7 +53,7 @@ def consultar_ativo():
             
             tipo = dados.get('tipo')
 
-            ativo_obj = dados_ativos_consulta(tipo, dados)
+            ativo_obj = Equipamento.fabricar_ativo(tipo, dados)(tipo, dados)
                 
             if ativo_obj:
                 ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])

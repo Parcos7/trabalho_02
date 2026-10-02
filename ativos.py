@@ -30,6 +30,18 @@ class Equipamento(ABC):
     def calcular_risco(self):
         pass
 
+    @staticmethod
+    def fabricar_ativo(tipo_ativo, dados_ativos):
+        match tipo_ativo:
+            case "NOTEBOOK":
+                return Notebook(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('qnt_ram', 0))
+            case "SERVIDOR":
+                return Servidor(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('sistema_operacional', 'N/A'))
+            case "ROTEADOR":
+                return Roteador(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('firmware_atualizado', False))
+            case "DESKTOP": 
+                return Desktop(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('qnt_ram', 0))
+
 class Servidor(Equipamento):
     def __init__(self, id_ativo: int, nome: str, responsavel: str, local: str, sistema_operacional: str):
         super().__init__(id_ativo, nome, responsavel, local)

@@ -4,21 +4,33 @@
 # 'arq' -> Simplificação de "arquivos" ou "arquivo" 
 # =====================================================================
 
+# remover.py
 from persistencia import ler_db, salvar_db
+from ativos import Equipamento
 
-def remover_ativo():
+def remover_ativo(): 
     db_inventario = ler_db()
     
     print("\n--- REMOVER ATIVO DE TI ---")
     id_busca = input("Digite o ID numérico do ativo que deseja remover: ").strip()
-    
+
     if id_busca in db_inventario:
-        nome_removido = db_inventario[id_busca]['nome']
+        dados = db_inventario[id_busca]
         
-        del db_inventario[id_busca]
+        ativo_obj = Equipamento.fabricar_ativo(dados.get('tipo'), dados)
+        ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])
         
-        salvar_db(db_inventario)
+        print("\nVocê está prestes a remover o seguinte equipamento permanentemente:")
+        ativo_obj.exibir_informacoes()
+        print("=" * 45)
         
-        print(f"\nSucesso: O ativo '{nome_removido}' e todas as suas vulnerabilidades foram removidos do db de forma permanente.")
+        confirmacao = input(f"Tem certeza que deseja deletar o {ativo_obj.nome}? (S/N): ").strip().upper()
+        
+        if confirmacao == 'S':
+            del db_inventario[id_busca]
+            salvar_db(db_inventario)
+            print(f"\nSucesso: O ativo '{ativo_obj.nome}' foi removido do db de forma permanente.")
+        else:
+            print("\nOperação de remoção cancelada.")
     else:
-        print("\nErro: Nenhum ativo encontrado com esse ID no db. Nenhuma ação foi realizada.")
+        print("\nErro: Nenhum ativo encontrado com esse ID no db.")

@@ -120,4 +120,4 @@ def cadastrar_ativo():
     salvar_db(db_inventario)
 
     print(f"\nSucesso: Ativo '{novo_ativo.nome}' \
-          (Objeto {novo_ativo.__class__.__name__}) registado e guardado na db!")
+        (Objeto {novo_ativo.__class__.__name__}) registado e guardado na db!")
