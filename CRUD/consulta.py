@@ -5,49 +5,88 @@
 # =====================================================================
 
 from persistencia import ler_db
+from ativos import Servidor, Roteador, Notebook, Desktop
 
+db_inventario = ler_db()
+
+def dados_ativos_consulta(tipo_ativo, dados_ativos):
+    ativo_obj = None
+    match tipo_ativo:
+        case "NOTEBOOK":
+            ativo_obj = Notebook(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('qnt_ram', 0))
+            return ativo_obj
+        case "SERVIDOR":
+            ativo_obj = Servidor(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('sistema_operacional', 'N/A'))
+            return ativo_obj
+        case "ROTEADOR":
+            ativo_obj = Roteador(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('firmware_atualizado', False))
+            return ativo_obj
+        case "DESKTOP": 
+            ativo_obj = Desktop(dados_ativos['id'], dados_ativos['nome'], dados_ativos['responsavel'], dados_ativos['local'], dados_ativos.get('qnt_ram', 0))
+            return ativo_obj
+        
 def consultar_todosA():
     db_inventario = ler_db()
-    for chave, ativo in db_inventario.items():
-            print(f"\nID: {ativo['id']}\n"\
-                f"Hostname: {ativo['nome']}\n"\
-                f"Responsável: {ativo['responsavel']}\n"\
-                f"Localização: {ativo['local']}\n"\
-                f"Tipo: {ativo['tipo']}\n" )   
+    
+    print("\n--- LISTAGEM DE TODOS OS ATIVOS ---")
+    
+    if not db_inventario:
+        print("Nenhum ativo cadastrado no sistema no momento.")
+        return
+    
+    for chave, dados in db_inventario.items():
+        tipo = dados.get('tipo')
+        
+        ativo_obj = dados_ativos_consulta(tipo, dados)
 
+        if ativo_obj:
+            ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])
+            
+            # Polimorfismo: O objeto chama sua própria função de exibir
+            ativo_obj.exibir_informacoes()
+            print(f"Status de Risco: {ativo_obj.calcular_risco()}")
+            
             print("\n--- Vulnerabilidades Associadas ---")
-            if not len(ativo['vulnerabilidades']):
-                print(" -> Este equipamento está limpo. Nenhuma vulnerabilidade registrada.") 
+            if not ativo_obj.vulnerabilidades:
+                print(" -> Este equipamento está limpo. Nenhuma vulnerabilidade registrada.")
             else:
-                for vul in ativo['vulnerabilidades']:
-                    print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {vul['status']}\n")
-            print("="*45)        
-
+                for vul in ativo_obj.vulnerabilidades:
+                    print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {vul['status']}")
+            
+            # Linha separadora visual entre um equipamento e outro
+            print("=" * 45)
+    
 
 def consultar_ativo():
-    db_inventario = ler_db()
     
     print("\n--- CONSULTA DE ATIVO DE TI ---")
     termo_busca = input("Digite o ID numérico ou o Hostname do ativo que deseja buscar: ").strip().lower()
     
     encontrado = False
     
-    for chave, ativo in db_inventario.items():
-        if str(ativo['id']) == termo_busca or ativo['nome'].lower() == termo_busca:
+    for chave, dados in db_inventario.items():
+        if str(dados['id']) == termo_busca or dados['nome'].lower() == termo_busca:
             print("\n[ ATIVO ENCONTRADO ]")
-            print(f"\nID: {ativo['id']}\n"\
-                f"Hostname: {ativo['nome']}\n"\
-                f"Responsável: {ativo['responsavel']}\n"\
-                f"Localização: {ativo['local']}\n"\
-                f"Tipo: {ativo['tipo']}\n" )   
             
-            print("\n--- Vulnerabilidades Associadas ---")
-            if not len(ativo['vulnerabilidades']):  
-                print(f" -> O equipamento {ativo['nome']} está limpo. Nenhuma vulnerabilidade registrada.\n")    
-            else:
-                for vul in ativo['vulnerabilidades']:  
-                    print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {vul['status']}\n")
-            print("="*45)          
+            tipo = dados.get('tipo')
+
+            ativo_obj = dados_ativos_consulta(tipo, dados)
+                
+            if ativo_obj:
+                ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])
+                
+                ativo_obj.exibir_informacoes()
+                
+                print(f"Status de Risco: {ativo_obj.calcular_risco()}")
+                
+                print("\n--- Vulnerabilidades Associadas ---")
+            
+                if not ativo_obj.vulnerabilidades:
+                    print(" -> Este equipamento está limpo. Nenhuma vulnerabilidade registrada.")
+                else:
+                    for vul in ativo_obj.vulnerabilidades:
+                        print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {vul['status']}")
+            
             encontrado = True
             break 
             
