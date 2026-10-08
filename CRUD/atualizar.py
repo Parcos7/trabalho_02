@@ -49,7 +49,7 @@ def atualizar_ativo():
                             ativo_obj.responsavel = novo_resp
                             break
                         except ValueError as erro:
-                            print(f"\nErro:{erro}\n") 
+                            print(f"\nErro: {erro}\n") 
                     
                 case 2:
                     print(f"Localização atual: {ativo_obj.local}")
@@ -65,7 +65,7 @@ def atualizar_ativo():
                             ativo_obj.local = novo_local
                             break
                         except ValueError as erro:
-                            print(f"\nErro:{erro}\n")
+                            print(f"\nErro: {erro}\n")
                                              
                 case 0:
                     print("\nAtualizaçãno cancelada.\n")

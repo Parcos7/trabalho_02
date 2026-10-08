@@ -4,7 +4,6 @@
 # 'arq' -> Simplificação de "arquivos" ou "arquivo" 
 # =====================================================================
 
-# remover.py
 from persistencia import ler_db, salvar_db
 from ativos import Equipamento
 
