@@ -1,3 +1,13 @@
+# =====================================================================
+# NOTA DE NOMENCLATURA PESSOAL:
+# 'db'  -> Simplificação de "banco_de_dados" 
+# 'arq' -> Simplificação de "arquivos" ou "arquivo"
+# 'resp' -> Simplificação de "Responsavel"
+# 'at' -> Simplificação de "Atualizar"
+# 'eq' -> Simplificação de "equipamento"
+# 'sev" -> |   | de "Severidade"
+# =====================================================================
+
 import numpy as np
 from persistencia import ler_db
 
