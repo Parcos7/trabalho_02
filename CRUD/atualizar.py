@@ -24,8 +24,9 @@ def atualizar_ativo():
         
         while True:   
             print("="*45)
-            print("1 - Nome do responsavel\n" \
-            "2 - Localidade" \
+            print("1 - Nome do responsavel" \
+            "\n2 - Localidade" \
+            "\n3 - Adicionar Dependência"\
             "\n0 - Cancelar")
             print("="*45)
 
@@ -66,7 +67,19 @@ def atualizar_ativo():
                             break
                         except ValueError as erro:
                             print(f"\nErro: {erro}\n")
-                                             
+                case 3:
+                    id_dependencia = input("Digite o ID do equipamento do qual este ativo depende: ").strip()
+                    if id_dependencia in db_inventario and id_dependencia != id_busca:
+                        fracao = float(input("Digite a fração de risco transmitida (ex: 0.3 para 30%): "))
+                        if 0 <= fracao < 1:
+                            ativo_obj.dependencias.append({'id_alvo': id_dependencia, 'fracao': fracao})
+                            print("Dependência registrada.")
+                        else:
+                            print("Erro: A fração deve estar no intervalo [0, 1).")
+                    else:
+                        print("Erro: ID inválido ou igual ao próprio equipamento.")
+                    break         
+                    
                 case 0:
                     print("\nAtualizaçãno cancelada.\n")
                     break

@@ -17,6 +17,7 @@ class Equipamento(ABC):
         self.responsavel = responsavel
         self.local = local
         self.vulnerabilidades = []
+        self.dependencias = []
 
     def adicionar_vulnerabilidade(self, vulnerabilidade: dict):
         self.vulnerabilidades.append(vulnerabilidade)
@@ -27,8 +28,8 @@ class Equipamento(ABC):
               f"Total de vulnerabilidades: {len(self.vulnerabilidades)}")
 
     @abstractmethod
-    def calcular_risco(self):
-        pass
+    def fator_exposicao(self):
+        return 0.8
 
     @staticmethod
     def fabricar_ativo(tipo_ativo, dados_ativos):
@@ -47,33 +48,33 @@ class Servidor(Equipamento):
         super().__init__(id_ativo, nome, responsavel, local)
         self.sistema_operacional = sistema_operacional
         self.tipo = "SERVIDOR"
-
-    def calcular_risco(self):
-        return "Cálculo de Risco de Servidor "
+    
+    def fator_exposicao(self):
+        return 1.5
 
 class Roteador(Equipamento):
     def __init__(self, id_ativo: int, nome: str, responsavel: str, local: str, firmware_atualizado: bool):
         super().__init__(id_ativo, nome, responsavel, local)
         self.firmware_atualizado = firmware_atualizado
         self.tipo = "ROTEADOR"
-    
-    def calcular_risco(self):
-        return "Cálculo de Risco de Roteador "
+        
+    def fator_exposicao(self):
+        return 0.8
 
 class Notebook(Equipamento):
     def __init__(self, id_ativo: int, nome:str, responsavel:str, local:str, qnt_ram: int):
         super().__init__(id_ativo, nome, responsavel, local)
         self.qnt_ram = qnt_ram
         self.tipo = "NOTEBOOK"
-
-    def calcular_risco(self):
-        return "Cálculo de risco de Notebook "
-
+    
+    def fator_exposicao(self):
+        return 0.8
+    
 class Desktop(Equipamento):
     def __init__(self, id_ativo: int, nome:str, responsavel:str, local:str, qnt_ram: int):
         super().__init__(id_ativo, nome, responsavel, local)
         self.qnt_ram = qnt_ram
         self.tipo = "DESKTOP"
-
-    def calcular_risco(self):
-        return "Calculo de risco de Desktop "
+    
+    def fator_exposicao(self):
+        return 0.8
