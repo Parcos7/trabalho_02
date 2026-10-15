@@ -18,7 +18,7 @@ ALTURA_TELA = 720
 TITULO_JANELA = "CyberPixel - SOC Level 3 [Visual Interface]"
 FPS = 50
 
-# Paleta de Cores
+# --- TEMA DARK ---
 COR_FUNDO = (0, 0, 0)
 COR_CHAO = (5, 5, 5)
 COR_GRADE = (0, 40, 0)
@@ -27,9 +27,14 @@ COR_TEXTO = (0, 255, 0)
 COR_TEXTO_MUTED = (0, 150, 0)
 COR_CIANO_NEON = (0, 255, 0)
 COR_VERDE_MATRIX = (0, 255, 0)
-COR_AMBAR = (200, 200, 0)
-COR_LARANJA = (255, 140, 0)
-COR_VERMELHO_NEON = (255, 0, 0)
+
+# --- ESCALA CROMÁTICA DE ALERTAS E RISCO ---
+COR_AMBAR = (200, 200, 0)              # Risco Baixo
+COR_LARANJA = (255, 140, 0)            # Risco Médio
+COR_VERMELHO_CLARO = (255, 80, 80)     # Risco Alto
+COR_VERMELHO_ESCURO = (180, 0, 0)      # Risco Crítico
+COR_VERMELHO_NEON = (255, 0, 0)        # Interface Padrão
+
 COR_PAINEL = (0, 0, 0)
 COR_PAINEL_BORDA = (0, 255, 0)
 
@@ -84,6 +89,8 @@ class App:
         pygame.init()
         pygame.key.set_repeat(200, 50) 
         
+        self.servidor_foco_painel = None
+
         self.tela = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA))
         pygame.display.set_caption(TITULO_JANELA)
         self.relogio = pygame.time.Clock()
@@ -122,6 +129,7 @@ class App:
         self.scroll_crud_ativos = 0
         self.scroll_vuln_inv = 0
         self.scroll_vuln_lista = 0
+        self.scroll_gaveta_servidores = 0
         self.log_selecionado = None
         self.rects_logs = []
         
@@ -164,9 +172,10 @@ class App:
 
         self.adicionar_log("SISTEMA", "SOC", "Interface de Segurança Nível 3 Inicializada.")
         self.sincronizar_dados()
-# ==========================================
-# SUB-SESSÃO: GERENCIAMENTO DE ESTADO E DADOS
-# ==========================================
+
+    # ==========================================
+    # SUB-SESSÃO: GERENCIAMENTO DE ESTADO E DADOS
+    # ==========================================
     def adicionar_log(self, acao, alvo, detalhes):
         hora = datetime.datetime.now().strftime("%H:%M:%S")
         self.historico_logs.insert(0, {
@@ -227,21 +236,33 @@ class App:
         elif max_peso == 2:
             self.cor_alerta_atual = COR_LARANJA 
             self.nivel_alerta_str = "ALERTA MÉDIO"
-        elif max_peso >= 3:
-            self.cor_alerta_atual = COR_VERMELHO_NEON 
+        elif max_peso == 3:
+            self.cor_alerta_atual = COR_VERMELHO_CLARO 
+            self.nivel_alerta_str = "ALERTA ALTO"
+        elif max_peso >= 4:
+            self.cor_alerta_atual = COR_VERMELHO_ESCURO 
             self.nivel_alerta_str = "ALERTA CRÍTICO!"
         else:
             self.cor_alerta_atual = COR_VERDE_MATRIX
             self.nivel_alerta_str = "WORKSTATION SEGURA"
             
+        # Proteção embutida: Se o servidor atual for deletado, tira o foco sem quebrar
+        servidores_ids = [str(a['id']) for a in self.ativos_brutos if a.get('tipo', '').upper() == 'SERVIDOR']
+        if getattr(self, 'servidor_foco_painel', None) not in servidores_ids:
+            self.servidor_foco_painel = servidores_ids[0] if servidores_ids else None
+            
         try:
             self.relatorio_risco = calcular_risco_global()
-        except Exception:
-            self.relatorio_risco = ["[ERRO] Motor de álgebra linear indisponível."]
+        except Exception as e:
+            self.relatorio_risco = [
+                "[ERRO CRÍTICO] Falha ao calcular a Matriz de Risco.",
+                "Motivo: Possível banco de dados vazio ou sem dependências.",
+                f"Detalhe Técnico: {str(e)}"
+            ]
 
-# ==========================================
-# SUB-SESSÃO: PROCESSAMENTO DE EVENTOS (CONTROLLER)
-# ==========================================
+    # ==========================================
+    # SUB-SESSÃO: PROCESSAMENTO DE EVENTOS
+    # ==========================================
     def tratar_clique(self, pos_mouse):
         if self.modal_ativo:
             rect_modal = pygame.Rect(250, 60, LARGURA_TELA - 500, ALTURA_TELA - 120)
@@ -323,6 +344,7 @@ class App:
                             self.definir_mensagem("ERRO VALIDAÇÃO: A localidade não pode conter números.", COR_VERMELHO_NEON)
                             return
 
+                        # Traduz Hostname para ID evitando quebrar silenciosamente
                         alvo = self.upd_id.texto.strip().lower()
                         id_resolvido = alvo
                         for d in self.ativos_brutos:
@@ -336,10 +358,11 @@ class App:
                             for c in self.campos_upd: c.texto = ""
                             self.definir_mensagem("SUCESSO: Dados do ativo atualizados!", COR_VERDE_MATRIX)
                         else:
-                            self.definir_mensagem("ERRO: ID não encontrado ou entrada inválida.", COR_VERMELHO_NEON)
+                            self.definir_mensagem("ERRO: ID/Hostname não encontrado ou entrada inválida.", COR_VERMELHO_NEON)
                         self.sincronizar_dados()
                         
                     elif self.aba_crud_ativa == "REMOVER":
+                        # Traduz Hostname para ID
                         alvo = self.rem_id.texto.strip().lower()
                         id_resolvido = alvo
                         for d in self.ativos_brutos:
@@ -353,7 +376,7 @@ class App:
                             for c in self.campos_rem: c.texto = ""
                             self.definir_mensagem("ALERTA: Ativo deletado permanentemente!", COR_AMBAR)
                         else:
-                            self.definir_mensagem("ERRO: ID não encontrado no sistema.", COR_VERMELHO_NEON)
+                            self.definir_mensagem("ERRO: ID/Hostname não encontrado no sistema.", COR_VERMELHO_NEON)
                         self.sincronizar_dados()
 
             elif self.modal_ativo == "DASHBOARD_TELAO":
@@ -375,6 +398,7 @@ class App:
                         return
 
             elif self.modal_ativo == "VULN_PATCH":
+                # Clique na lista de ATIVOS para preencher ID
                 for r_item, d in self.rects_ativos_vuln:
                     if r_item.collidepoint(pos_mouse):
                         self.vuln_id.texto = str(d['id'])
@@ -384,6 +408,7 @@ class App:
                         self.definir_mensagem(f"ALVO: {d['nome']}. Preencha os dados e registre a falha.", COR_AMBAR)
                         return
 
+                # Clique na lista de VULNERABILIDADES para corrigir
                 for r_item, v in self.rects_vulns:
                     if r_item.collidepoint(pos_mouse):
                         self.vuln_id.texto = str(v['id_ativo'])
@@ -396,10 +421,12 @@ class App:
                         self.definir_mensagem(f"SELECIONADO: {v['nome']}. Descreva no Log o que fará para corrigir.", COR_AMBAR)
                         return
 
+                # Sincronizado com a posição de desenho
                 rect_btn_registrar = pygame.Rect(280, 520, 200, 48)
                 rect_btn_corrigir = pygame.Rect(500, 520, 200, 48)
                 
                 if rect_btn_registrar.collidepoint(pos_mouse):
+                    # Traduz Hostname para ID
                     alvo = self.vuln_id.texto.strip().lower()
                     id_resolvido = alvo
                     for d in self.ativos_brutos:
@@ -505,6 +532,13 @@ class App:
                         max_scroll = max(0, len(self.lista_vulns_ativas) - 4)
                         self.scroll_vuln_lista = max(0, min(self.scroll_vuln_lista, max_scroll))
 
+                elif self.modal_ativo == "SERVIDOR_INFRA":
+                    area_gavetas = pygame.Rect(270, 130, 200, 460)
+                    if area_gavetas.collidepoint(pos_mouse):
+                        self.scroll_gaveta_servidores -= evento.y
+                        max_scroll = max(0, len([a for a in self.ativos_brutos if a.get('tipo', '').upper() == 'SERVIDOR']) - 9)
+                        self.scroll_gaveta_servidores = max(0, min(self.scroll_gaveta_servidores, max_scroll))
+
             if evento.type == pygame.KEYDOWN and evento.key == pygame.K_TAB:
                 for i, c in enumerate(campos_ativos):
                     if c.ativo:
@@ -525,9 +559,9 @@ class App:
             if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 self.tratar_clique(pos_mouse)
 
-# ==========================================
-# SUB-SESSÃO: RENDERIZAÇÃO GRÁFICA (VIEW)
-# ==========================================
+    # ==========================================
+    # SUB-SESSÃO: RENDERIZAÇÃO GRÁFICA
+    # ==========================================
     def desenhar_cenario(self):
         self.tela.fill(COR_FUNDO)
         pygame.draw.rect(self.tela, COR_PAREDE, (0, 0, LARGURA_TELA, 340))
@@ -552,6 +586,9 @@ class App:
         pygame.draw.rect(self.tela, (34, 50, 78), (110, 480, 250, 160), 2)
 
     def desenhar_objetos(self):
+        fase_telao = 0
+        area_rolagem = pygame.Rect(0, 0, 0, 0)
+        
         cor_nb = COR_CIANO_NEON if self.objeto_em_hover == "NOTEBOOK" else (50, 80, 120)
         rect_tela_note = pygame.Rect(self.rect_notebook.x + 20, self.rect_notebook.y, 140, 65)
         pygame.draw.rect(self.tela, (15, 20, 30), rect_tela_note)
@@ -574,7 +611,7 @@ class App:
             led_aceso = ((ticks // (280 + i * 85)) % 2 == 0)
             
             if self.alerta_ativo:
-                cor_led = COR_VERMELHO_NEON if led_aceso else (80, 10, 20)
+                cor_led = self.cor_alerta_atual if led_aceso else (80, 10, 20)
             else:
                 cor_led = COR_VERDE_MATRIX if led_aceso else COR_AMBAR
                 
@@ -583,38 +620,45 @@ class App:
         self.tela.blit(self.fonte_p.render("[ SERVIDOR: JSON / RISCO ]", True, COR_AMBAR), (self.rect_servidor.x, self.rect_servidor.y - 22))
 
         piscar = self.alerta_ativo and ((ticks // 250) % 2 == 0)
-        cor_pc = COR_VERMELHO_NEON if piscar else (COR_CIANO_NEON if self.objeto_em_hover == "WORKSTATION" else (45, 65, 95))
+        cor_pc = self.cor_alerta_atual if piscar else (COR_CIANO_NEON if self.objeto_em_hover == "WORKSTATION" else (45, 65, 95))
         fundo_tela = (80, 10, 20) if piscar else ((15, 30, 45) if self.objeto_em_hover == "WORKSTATION" else (15, 22, 35))
         rect_pc_tela = pygame.Rect(self.rect_workstation.x + 20, self.rect_workstation.y, 150, 105)
         pygame.draw.rect(self.tela, fundo_tela, rect_pc_tela)
         pygame.draw.rect(self.tela, cor_pc, rect_pc_tela, 3 if self.alerta_ativo else 2)
         pygame.draw.rect(self.tela, (30, 45, 65), (self.rect_workstation.x + 85, self.rect_workstation.y + 105, 20, 25))
         pygame.draw.rect(self.tela, (30, 45, 65), (self.rect_workstation.x + 65, self.rect_workstation.y + 125, 60, 10))
-        rotulo_pc = "ALERTA CRÍTICO!" if self.alerta_ativo else "WORKSTATION SEGURA"
-        self.tela.blit(self.fonte_p.render(f"[ {rotulo_pc} ]", True, COR_VERMELHO_NEON if self.alerta_ativo else COR_VERDE_MATRIX), (self.rect_workstation.x, self.rect_workstation.y - 20))
+        
+        rotulo_pc = self.nivel_alerta_str if self.alerta_ativo else "WORKSTATION SEGURA"
+        self.tela.blit(self.fonte_p.render(f"[ {rotulo_pc} ]", True, self.cor_alerta_atual if self.alerta_ativo else COR_VERDE_MATRIX), (self.rect_workstation.x, self.rect_workstation.y - 20))
 
+        # =======================================================
+        # 1. ALERTA DA WORKSTATION (EMOJI BUG)
+        # =======================================================
         if self.alerta_ativo:
             bug_x = self.rect_workstation.x + 75
             bug_y = self.rect_workstation.y - 65 + int(math.sin(ticks / 140.0) * 8)
             
             pygame.draw.rect(self.tela, (40, 8, 16), (bug_x - 14, bug_y - 4, 46, 38))
-            pygame.draw.rect(self.tela, COR_VERMELHO_NEON, (bug_x - 14, bug_y - 4, 46, 38), 2)
+            pygame.draw.rect(self.tela, self.cor_alerta_atual, (bug_x - 14, bug_y - 4, 46, 38), 2)
             
             try: 
                 self.tela.blit(self.fonte_emoji.render("👾", True, (255, 255, 255)), (bug_x - 6, bug_y - 2))
             except Exception: 
-                self.tela.blit(self.fonte_g.render("!", True, COR_VERMELHO_NEON), (bug_x + 2, bug_y))
+                self.tela.blit(self.fonte_g.render("!", True, self.cor_alerta_atual), (bug_x + 2, bug_y))
 
-            pygame.draw.rect(self.tela, (12, 18, 28), self.rect_telao)
-            pygame.draw.rect(self.tela, COR_CIANO_NEON if self.objeto_em_hover == "TELAO" else (30, 48, 75), self.rect_telao, 2)
-            
-            fase_telao = (ticks // 10000) % 2 
-            titulo_telao = "DASHBOARD [AUDITORIA]: LOGS EM TEMPO REAL" if fase_telao == 0 else "DASHBOARD [AMEAÇAS]: VULNERABILIDADES ATIVAS"
-            cor_titulo_telao = COR_CIANO_NEON if fase_telao == 0 else COR_VERMELHO_NEON
-            self.tela.blit(self.fonte_m.render(titulo_telao, True, cor_titulo_telao), (self.rect_telao.x + 16, self.rect_telao.y + 10))
-            
-            area_rolagem = pygame.Rect(self.rect_telao.x + 10, self.rect_telao.y + 35, self.rect_telao.width - 20, self.rect_telao.height - 45)
-            self.tela.set_clip(area_rolagem)
+        # =======================================================
+        # 2. DASHBOARD / TELÃO
+        # =======================================================
+        pygame.draw.rect(self.tela, (12, 18, 28), self.rect_telao)
+        pygame.draw.rect(self.tela, COR_CIANO_NEON if self.objeto_em_hover == "TELAO" else (30, 48, 75), self.rect_telao, 2)
+        
+        fase_telao = (ticks // 10000) % 2 
+        titulo_telao = "DASHBOARD [AUDITORIA]: LOGS EM TEMPO REAL" if fase_telao == 0 else "DASHBOARD [AMEAÇAS]: VULNERABILIDADES ATIVAS"
+        cor_titulo_telao = COR_CIANO_NEON if fase_telao == 0 else COR_VERMELHO_NEON
+        self.tela.blit(self.fonte_m.render(titulo_telao, True, cor_titulo_telao), (self.rect_telao.x + 16, self.rect_telao.y + 10))
+        
+        area_rolagem = pygame.Rect(self.rect_telao.x + 10, self.rect_telao.y + 35, self.rect_telao.width - 20, self.rect_telao.height - 45)
+        self.tela.set_clip(area_rolagem)
         
         if fase_telao == 0:
             logs_para_mostrar = self.historico_logs[:25]
@@ -646,7 +690,15 @@ class App:
                 for _ in range(2 if deslocamento_y > 0 else 1):
                     for v in self.lista_vulns_ativas:
                         txt_vuln = f"> URGENTE! Ativo ID:{v['id_ativo']} ({v['nome']}) - CVE: {v['cve']} [{v['severidade'].upper()}]"
-                        self.tela.blit(self.fonte_p.render(txt_vuln, True, COR_VERMELHO_NEON), (area_rolagem.x + 5, pos_y_atual))
+                        
+                        # CORREÇÃO DE COR DINÂMICA
+                        sev_log = v['severidade'].lower()
+                        if sev_log == 'baixa': cor_log_v = COR_AMBAR
+                        elif sev_log == 'media': cor_log_v = COR_LARANJA
+                        elif sev_log == 'alta': cor_log_v = COR_VERMELHO_CLARO
+                        else: cor_log_v = COR_VERMELHO_ESCURO
+                        
+                        self.tela.blit(self.fonte_p.render(txt_vuln, True, cor_log_v), (area_rolagem.x + 5, pos_y_atual))
                         pos_y_atual += 30
             
         self.tela.set_clip(None)
@@ -796,29 +848,21 @@ class App:
                 self.tela.blit(self.fonte_p.render("Selecione um log para", True, (60, 80, 100)), (area_detalhe.x + 10, area_detalhe.y + 120))
                 self.tela.blit(self.fonte_p.render("visualizar os dados.", True, (60, 80, 100)), (area_detalhe.x + 10, area_detalhe.y + 140))
 
-
         elif self.modal_ativo == "SERVIDOR_INFRA":
-            self.tela.blit(self.fonte_g.render("INFRAESTRUTURA E MOTOR ALGÉBRICO AUTOMÁTICO", True, COR_AMBAR), (rect_modal.x + 30, rect_modal.y + 24))
-            self.tela.blit(self.fonte_p.render("Topologia de Risco: Clique nos equipamentos para analisar a matriz.", True, COR_TEXTO_MUTED), (rect_modal.x + 30, rect_modal.y + 55))
+            self.tela.blit(self.fonte_g.render("INFRAESTRUTURA: TOPOLOGIA DE RISCO (GAVETAS)", True, COR_AMBAR), (rect_modal.x + 30, rect_modal.y + 24))
             
-            info_lines = [l for l in self.relatorio_risco if "Matriz M" in l or "Determ" in l]
-            titulo_matriz = self.fonte_p.render("[STATUS DA REDE GLOBAL] MOTOR ALGÉBRICO INICIALIZADO:", True, COR_CIANO_NEON)
-            self.tela.blit(titulo_matriz, (rect_modal.x + 30, rect_modal.y + 85))
+            # 1. DIVIDIR A TELA EM DOIS PAINÉIS
+            area_gavetas = pygame.Rect(rect_modal.x + 20, rect_modal.y + 70, 200, 460)
+            area_arvore = pygame.Rect(rect_modal.x + 240, rect_modal.y + 70, rect_modal.width - 260, 460)
+            
+            pygame.draw.rect(self.tela, (12, 18, 28), area_gavetas)
+            pygame.draw.rect(self.tela, (30, 45, 68), area_gavetas, 1)
+            self.tela.blit(self.fonte_m.render("SERVIDORES", True, COR_CIANO_NEON), (area_gavetas.x + 10, area_gavetas.y + 10))
 
-            for i, line in enumerate(info_lines):
-                clean_line = line.replace("=================== RELATÓRIO DE RISCO GLOBAL ===================", "").strip()
-                if clean_line:
-                    self.tela.blit(self.fonte_p.render(f"> {clean_line}", True, COR_TEXTO_MUTED), (rect_modal.x + 30, rect_modal.y + 105 + i * 20))
+            pygame.draw.rect(self.tela, (10, 15, 20), area_arvore)
+            pygame.draw.rect(self.tela, COR_AMBAR, area_arvore, 1)
 
-            cx = rect_modal.x + rect_modal.width // 2
-            cy = rect_modal.y + rect_modal.height // 2 + 30
-            
-            servidor = next((a for a in self.ativos_brutos if a.get('tipo', '').upper() == 'SERVIDOR'), None)
-            outros_ativos = [a for a in self.ativos_brutos if a.get('tipo', '').upper() != 'SERVIDOR']
-            
             self.rects_matriz_risco = []
-            angulo_passo = 2 * math.pi / len(outros_ativos) if outros_ativos else 0
-            raio = 160
 
             def obter_risco_efetivo(nome_busca):
                 for linha in self.relatorio_risco:
@@ -827,7 +871,7 @@ class App:
                         except: pass
                 return "0.00"
 
-            def desenhar_icone_ativo(x, y, ativo, is_center=False):
+            def desenhar_icone_ativo(x, y, ativo):
                 tipo = ativo.get('tipo', '').upper()
                 nome = ativo.get('nome', 'UNK').upper()
                 risco_efetivo = obter_risco_efetivo(nome)
@@ -835,19 +879,31 @@ class App:
                 vulns_abertas = [v for v in ativo.get('vulnerabilidades', []) if v.get('status', '').lower() != 'corrigida']
                 tem_alerta = len(vulns_abertas) > 0
                 
-                cor_borda = COR_VERMELHO_NEON if tem_alerta else COR_VERDE_MATRIX
-                cor_fundo = (40, 10, 10) if tem_alerta else (15, 25, 35)
+                # CORREÇÃO: COR DE BORDA DINÂMICA NA ÁRVORE DE INFRA
+                if tem_alerta:
+                    pesos = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
+                    max_sev = max([pesos.get(v.get('severidade', 'baixa').lower(), 1) for v in vulns_abertas])
+                    
+                    if max_sev == 1: cor_borda = COR_AMBAR
+                    elif max_sev == 2: cor_borda = COR_LARANJA
+                    elif max_sev == 3: cor_borda = COR_VERMELHO_CLARO
+                    else: cor_borda = COR_VERMELHO_ESCURO
+                    
+                    cor_fundo = (40, 10, 10) 
+                else:
+                    cor_borda = COR_VERDE_MATRIX
+                    cor_fundo = (15, 25, 35)
                 
-                rect_clique = pygame.Rect(x - 40, y - 80, 80, 160) if is_center else pygame.Rect(x - 40, y - 40, 80, 80)
+                rect_clique = pygame.Rect(x - 30, y - 50, 60, 100) if tipo == "SERVIDOR" else pygame.Rect(x - 40, y - 40, 80, 80)
                 if rect_clique.collidepoint(pos_mouse):
                     cor_fundo = (80, 20, 20) if tem_alerta else (30, 45, 65)
 
-                if tipo == "SERVIDOR" or is_center:
-                    rect_vis = pygame.Rect(x - 35, y - 70, 70, 140)
-                    pygame.draw.rect(self.tela, cor_fundo, rect_vis, border_radius=8)
-                    pygame.draw.rect(self.tela, cor_borda, rect_vis, 2, border_radius=8)
-                    for j in range(4):
-                        pygame.draw.line(self.tela, cor_borda, (x - 25, y - 40 + j*25), (x + 25, y - 40 + j*25), 2)
+                if tipo == "SERVIDOR":
+                    rect_vis = pygame.Rect(x - 30, y - 50, 60, 100)
+                    pygame.draw.rect(self.tela, cor_fundo, rect_vis, border_radius=6)
+                    pygame.draw.rect(self.tela, cor_borda, rect_vis, 2, border_radius=6)
+                    for j in range(3):
+                        pygame.draw.line(self.tela, cor_borda, (x - 20, y - 20 + j*20), (x + 20, y - 20 + j*20), 2)
                         
                 elif tipo == "DESKTOP":
                     monitor = pygame.Rect(x - 35, y - 25, 70, 40)
@@ -879,42 +935,89 @@ class App:
                 nome_lbl = self.fonte_m.render(nome[:8], True, COR_TEXTO)
                 risco_lbl = self.fonte_p.render(f"Risco: {risco_efetivo}", True, cor_borda)
                 
-                offset_y_nome = -95 if is_center else -50
-                offset_y_risco = 80 if is_center else 35
+                offset_y_nome = -75 if tipo == "SERVIDOR" else -50
+                offset_y_risco = 55 if tipo == "SERVIDOR" else 35
                 
                 self.tela.blit(nome_lbl, (x - nome_lbl.get_width()//2, y + offset_y_nome))
                 self.tela.blit(risco_lbl, (x - risco_lbl.get_width()//2, y + offset_y_risco))
 
                 if tem_alerta:
                     pygame.draw.circle(self.tela, (0,0,0), (x + 30, y - 30), 12)
-                    pygame.draw.circle(self.tela, COR_VERMELHO_NEON, (x + 30, y - 30), 12, 2)
-                    exc = self.fonte_m.render("!", True, COR_VERMELHO_NEON)
+                    pygame.draw.circle(self.tela, cor_borda, (x + 30, y - 30), 12, 2)
+                    exc = self.fonte_m.render("!", True, cor_borda)
                     self.tela.blit(exc, (x + 26, y - 38))
 
                 self.rects_matriz_risco.append((rect_clique, ativo))
 
-            for i, ativo in enumerate(outros_ativos):
-                theta = i * angulo_passo
-                x = cx + raio * math.cos(theta)
-                y = cy + raio * math.sin(theta)
-                pygame.draw.line(self.tela, (40, 60, 80), (cx, cy), (x, y), 2)
+            # 2. FILTRAR SERVIDORES E DESENHAR AS GAVETAS LATERAIS
+            servidores = [a for a in self.ativos_brutos if a.get('tipo', '').upper() == 'SERVIDOR']
+            
+            if not self.servidor_foco_painel and servidores:
+                self.servidor_foco_painel = str(servidores[0]['id'])
+            
+            servidores_visiveis = servidores[self.scroll_gaveta_servidores : self.scroll_gaveta_servidores + 9]
+            
+            for i, srv in enumerate(servidores_visiveis):
+                r_gaveta = pygame.Rect(area_gavetas.x + 10, area_gavetas.y + 40 + (i * 45), 180, 35)
+                
+                esta_aberta = (self.servidor_foco_painel == str(srv['id']))
+                cor_fundo = (30, 60, 90) if esta_aberta else (20, 30, 45)
+                
+                pygame.draw.rect(self.tela, cor_fundo, r_gaveta, border_radius=4)
+                pygame.draw.rect(self.tela, COR_CIANO_NEON if esta_aberta else (40, 58, 85), r_gaveta, 1, border_radius=4)
+                
+                txt_srv = self.fonte_p.render(f"[{srv['id']}] {srv.get('nome', '')}", True, COR_TEXTO)
+                self.tela.blit(txt_srv, (r_gaveta.x + 10, r_gaveta.y + 10))
+                
+                if r_gaveta.collidepoint(pos_mouse) and pygame.mouse.get_pressed()[0]:
+                    self.servidor_foco_painel = str(srv['id'])
 
-            for i, ativo in enumerate(outros_ativos):
-                theta = i * angulo_passo
-                x = cx + raio * math.cos(theta)
-                y = cy + raio * math.sin(theta)
-                desenhar_icone_ativo(x, y, ativo, False)
+            # 3. DESENHAR A ÁRVORE PARA O SERVIDOR FOCADO
+            if self.servidor_foco_painel:
+                srv_alvo = next((s for s in servidores if str(s['id']) == self.servidor_foco_painel), None)
+                
+                if srv_alvo:
+                    y_srv = area_arvore.y + 80
+                    y_rot = area_arvore.y + 220
+                    y_end = area_arvore.y + 360
+                    
+                    cx_srv = area_arvore.x + (area_arvore.width // 2)
+                    
+                    roteadores = [a for a in self.ativos_brutos if a.get('tipo', '').upper() == 'ROTEADOR']
+                    endpoints = [a for a in self.ativos_brutos if a.get('tipo', '').upper() in ['NOTEBOOK', 'DESKTOP']]
+                    
+                    pos_roteadores = []
+                    
+                    if roteadores:
+                        espaco_rot = area_arvore.width / (len(roteadores) + 1)
+                        for i, rot in enumerate(roteadores):
+                            rx = area_arvore.x + espaco_rot * (i + 1)
+                            pos_roteadores.append((rx, y_rot, rot))
+                            pygame.draw.line(self.tela, (60, 90, 120), (cx_srv, y_srv + 50), (rx, y_rot - 15), 2)
+                            
+                    if endpoints:
+                        espaco_end = area_arvore.width / (len(endpoints) + 1)
+                        for i, end in enumerate(endpoints):
+                            ex = area_arvore.x + espaco_end * (i + 1)
+                            
+                            if pos_roteadores:
+                                idx_rot = i % len(pos_roteadores)
+                                rx_pai = pos_roteadores[idx_rot][0]
+                                pygame.draw.line(self.tela, (40, 70, 90), (rx_pai, y_rot + 15), (ex, y_end - 25), 2)
+                            else:
+                                pygame.draw.line(self.tela, (40, 70, 90), (cx_srv, y_srv + 50), (ex, y_end - 25), 2)
+                                
+                            desenhar_icone_ativo(ex, y_end, end)
 
-            if servidor:
-                desenhar_icone_ativo(cx, cy, servidor, True)
+                    for rx, ry, rot in pos_roteadores:
+                        desenhar_icone_ativo(rx, ry, rot)
+                        
+                    desenhar_icone_ativo(cx_srv, y_srv, srv_alvo)
             else:
-                pygame.draw.circle(self.tela, (30, 45, 68), (int(cx), int(cy)), 50)
-                pygame.draw.circle(self.tela, COR_CIANO_NEON, (int(cx), int(cy)), 50, 2)
-                lbl = self.fonte_m.render("SEM SERVIDOR", True, COR_CIANO_NEON)
-                self.tela.blit(lbl, (cx - lbl.get_width()//2, cy - 8))
+                self.tela.blit(self.fonte_p.render("<- Crie ou selecione um servidor na gaveta lateral.", True, COR_TEXTO_MUTED), (area_arvore.x + 20, area_arvore.y + 20))
 
             if self.mensagem_status:
-                self.tela.blit(self.fonte_m.render(self.mensagem_status, True, self.cor_status), (rect_modal.x + 30, rect_modal.y + 480))
+                self.tela.blit(self.fonte_m.render(self.mensagem_status, True, self.cor_status), (rect_modal.x + 30, rect_modal.y + 550))
 
         elif self.modal_ativo == "VULN_PATCH":
             self.tela.blit(self.fonte_g.render("TELA DE INCIDENTES // WORKSTATION ALVO", True, COR_VERMELHO_NEON), (rect_modal.x + 30, rect_modal.y + 24))
@@ -954,10 +1057,12 @@ class App:
                     
                     texto_vuln = f"ID:{v['id_ativo']} | {v['nome']} | CVE: {v['cve']}"
                     
+                    # CORREÇÃO DE COR DINÂMICA
                     sev_list = v['severidade'].lower()
                     if sev_list == 'baixa': cor_txt = COR_AMBAR
                     elif sev_list == 'media': cor_txt = COR_LARANJA
-                    else: cor_txt = COR_VERMELHO_NEON
+                    elif sev_list == 'alta': cor_txt = COR_VERMELHO_CLARO
+                    else: cor_txt = COR_VERMELHO_ESCURO
                     
                     self.tela.blit(self.fonte_p.render(texto_vuln, True, cor_txt), (r_item.x + 10, r_item.y + 3))
                     self.rects_vulns.append((r_item, v))
@@ -981,9 +1086,9 @@ class App:
             pygame.draw.rect(self.tela, cor_borda_fix, btn_fix, 2)
             self.tela.blit(self.fonte_m.render("CORRIGIR", True, cor_texto_fix), (btn_fix.x + 55, btn_fix.y + 14))
 
-# ==========================================
-# SUB-SESSÃO: LOOP DE EXECUÇÃO
-# ==========================================
+    # ==========================================
+    # SUB-SESSÃO: LOOP DE EXECUÇÃO
+    # ==========================================
     def executar(self):
         while self.rodando:
             self.processar_eventos()

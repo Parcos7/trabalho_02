@@ -8,7 +8,7 @@
 # 'so' -> Simplificação de "Sistema Operacional"
 # =====================================================================
 
-from abc import ABC
+from abc import ABC, abstractmethod
 
 class Equipamento(ABC):
     def __init__(self, id_ativo: int, nome: str, responsavel: str, local: str):
@@ -26,6 +26,10 @@ class Equipamento(ABC):
         print(f"\n[ID: {self.id}] - {self.nome}\n"\
               f"Responsável: {self.responsavel} | Local: {self.local}\n" \
               f"Total de vulnerabilidades: {len(self.vulnerabilidades)}")
+
+    @abstractmethod
+    def fator_exposicao(self):
+        return 0.8
 
     @staticmethod
     def fabricar_ativo(tipo_ativo, dados_ativos):
@@ -45,6 +49,8 @@ class Servidor(Equipamento):
         self.sistema_operacional = sistema_operacional
         self.tipo = "SERVIDOR"
     
+    def fator_exposicao(self):
+        return 1.5
 
 class Roteador(Equipamento):
     def __init__(self, id_ativo: int, nome: str, responsavel: str, local: str, firmware_atualizado: bool):
@@ -52,11 +58,17 @@ class Roteador(Equipamento):
         self.firmware_atualizado = firmware_atualizado
         self.tipo = "ROTEADOR"
         
+    def fator_exposicao(self):
+        return 0.8
+
 class Notebook(Equipamento):
     def __init__(self, id_ativo: int, nome:str, responsavel:str, local:str, qnt_ram: int):
         super().__init__(id_ativo, nome, responsavel, local)
         self.qnt_ram = qnt_ram
         self.tipo = "NOTEBOOK"
+    
+    def fator_exposicao(self):
+        return 0.8
     
 class Desktop(Equipamento):
     def __init__(self, id_ativo: int, nome:str, responsavel:str, local:str, qnt_ram: int):
@@ -64,3 +76,5 @@ class Desktop(Equipamento):
         self.qnt_ram = qnt_ram
         self.tipo = "DESKTOP"
     
+    def fator_exposicao(self):
+        return 0.8
