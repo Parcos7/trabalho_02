@@ -10,11 +10,15 @@ from CRUD.remover import remover_ativo
 from vulnerabilidades import registrar_vulnerabilidade, corrigir_vulnerabilidade
 from CRUD.risco import calcular_risco_global
 
+# ==========================================
+# SESSÃO: CONFIGURAÇÕES GERAIS E CONSTANTES
+# ==========================================
 LARGURA_TELA = 1280
 ALTURA_TELA = 720
 TITULO_JANELA = "CyberPixel - SOC Level 3 [Visual Interface]"
 FPS = 50
 
+# Paleta de Cores
 COR_FUNDO = (0, 0, 0)
 COR_CHAO = (5, 5, 5)
 COR_GRADE = (0, 40, 0)
@@ -29,6 +33,9 @@ COR_VERMELHO_NEON = (255, 0, 0)
 COR_PAINEL = (0, 0, 0)
 COR_PAINEL_BORDA = (0, 255, 0)
 
+# ==========================================
+# SESSÃO: COMPONENTES DE INTERFACE (UI)
+# ==========================================
 class CaixaTexto:
     def __init__(self, x, y, largura, altura, rotulo):
         self.rect = pygame.Rect(x, y, largura, altura)
@@ -69,6 +76,9 @@ class CaixaTexto:
             
         tela.blit(img_txt, (self.rect.x + 8, self.rect.y + 8))
 
+# ==========================================
+# SESSÃO: CLASSE PRINCIPAL DO SISTEMA (APP)
+# ==========================================
 class App:
     def __init__(self):
         pygame.init()
@@ -82,6 +92,7 @@ class App:
         self.fonte_p = pygame.font.SysFont("Consolas", 14)
         self.fonte_m = pygame.font.SysFont("Consolas", 16, bold=True)
         self.fonte_g = pygame.font.SysFont("Consolas", 24, bold=True)
+        self.fonte_emoji = pygame.font.SysFont("Segoe UI Emoji", 26)
 
         self.rect_notebook = pygame.Rect(490, 470, 180, 100)
         self.rect_servidor = pygame.Rect(1020, 160, 200, 480)
@@ -153,7 +164,9 @@ class App:
 
         self.adicionar_log("SISTEMA", "SOC", "Interface de Segurança Nível 3 Inicializada.")
         self.sincronizar_dados()
-
+# ==========================================
+# SUB-SESSÃO: GERENCIAMENTO DE ESTADO E DADOS
+# ==========================================
     def adicionar_log(self, acao, alvo, detalhes):
         hora = datetime.datetime.now().strftime("%H:%M:%S")
         self.historico_logs.insert(0, {
@@ -226,6 +239,9 @@ class App:
         except Exception:
             self.relatorio_risco = ["[ERRO] Motor de álgebra linear indisponível."]
 
+# ==========================================
+# SUB-SESSÃO: PROCESSAMENTO DE EVENTOS (CONTROLLER)
+# ==========================================
     def tratar_clique(self, pos_mouse):
         if self.modal_ativo:
             rect_modal = pygame.Rect(250, 60, LARGURA_TELA - 500, ALTURA_TELA - 120)
@@ -509,6 +525,9 @@ class App:
             if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 self.tratar_clique(pos_mouse)
 
+# ==========================================
+# SUB-SESSÃO: RENDERIZAÇÃO GRÁFICA (VIEW)
+# ==========================================
     def desenhar_cenario(self):
         self.tela.fill(COR_FUNDO)
         pygame.draw.rect(self.tela, COR_PAREDE, (0, 0, LARGURA_TELA, 340))
@@ -577,21 +596,25 @@ class App:
         if self.alerta_ativo:
             bug_x = self.rect_workstation.x + 75
             bug_y = self.rect_workstation.y - 65 + int(math.sin(ticks / 140.0) * 8)
+            
             pygame.draw.rect(self.tela, (40, 8, 16), (bug_x - 14, bug_y - 4, 46, 38))
             pygame.draw.rect(self.tela, COR_VERMELHO_NEON, (bug_x - 14, bug_y - 4, 46, 38), 2)
-            try: self.tela.blit(self.fonte_g.render("!", True, COR_VERMELHO_NEON), (bug_x + 14, bug_y + 4))
-            except Exception: pass
+            
+            try: 
+                self.tela.blit(self.fonte_emoji.render("👾", True, (255, 255, 255)), (bug_x - 6, bug_y - 2))
+            except Exception: 
+                self.tela.blit(self.fonte_g.render("!", True, COR_VERMELHO_NEON), (bug_x + 2, bug_y))
 
-        pygame.draw.rect(self.tela, (12, 18, 28), self.rect_telao)
-        pygame.draw.rect(self.tela, COR_CIANO_NEON if self.objeto_em_hover == "TELAO" else (30, 48, 75), self.rect_telao, 2)
-        
-        fase_telao = (ticks // 10000) % 2 
-        titulo_telao = "DASHBOARD [AUDITORIA]: LOGS EM TEMPO REAL" if fase_telao == 0 else "DASHBOARD [AMEAÇAS]: VULNERABILIDADES ATIVAS"
-        cor_titulo_telao = COR_CIANO_NEON if fase_telao == 0 else COR_VERMELHO_NEON
-        self.tela.blit(self.fonte_m.render(titulo_telao, True, cor_titulo_telao), (self.rect_telao.x + 16, self.rect_telao.y + 10))
-        
-        area_rolagem = pygame.Rect(self.rect_telao.x + 10, self.rect_telao.y + 35, self.rect_telao.width - 20, self.rect_telao.height - 45)
-        self.tela.set_clip(area_rolagem)
+            pygame.draw.rect(self.tela, (12, 18, 28), self.rect_telao)
+            pygame.draw.rect(self.tela, COR_CIANO_NEON if self.objeto_em_hover == "TELAO" else (30, 48, 75), self.rect_telao, 2)
+            
+            fase_telao = (ticks // 10000) % 2 
+            titulo_telao = "DASHBOARD [AUDITORIA]: LOGS EM TEMPO REAL" if fase_telao == 0 else "DASHBOARD [AMEAÇAS]: VULNERABILIDADES ATIVAS"
+            cor_titulo_telao = COR_CIANO_NEON if fase_telao == 0 else COR_VERMELHO_NEON
+            self.tela.blit(self.fonte_m.render(titulo_telao, True, cor_titulo_telao), (self.rect_telao.x + 16, self.rect_telao.y + 10))
+            
+            area_rolagem = pygame.Rect(self.rect_telao.x + 10, self.rect_telao.y + 35, self.rect_telao.width - 20, self.rect_telao.height - 45)
+            self.tela.set_clip(area_rolagem)
         
         if fase_telao == 0:
             logs_para_mostrar = self.historico_logs[:25]
@@ -958,6 +981,9 @@ class App:
             pygame.draw.rect(self.tela, cor_borda_fix, btn_fix, 2)
             self.tela.blit(self.fonte_m.render("CORRIGIR", True, cor_texto_fix), (btn_fix.x + 55, btn_fix.y + 14))
 
+# ==========================================
+# SUB-SESSÃO: LOOP DE EXECUÇÃO
+# ==========================================
     def executar(self):
         while self.rodando:
             self.processar_eventos()

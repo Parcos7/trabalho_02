@@ -6,7 +6,7 @@
 # 'cad' -> Simplificação de "Cadastrar"
 # =====================================================================
 from persistencia import ler_db, salvar_db
-from ativos import Notebook, Servidor, Roteador, Desktop
+from ativos import Equipamento
 
 def amarrar_dependencia_automatica(novo_ativo_obj, db_inventario, tipo_ativo):
     if not novo_ativo_obj:
@@ -80,37 +80,19 @@ def cadastrar_ativo(id_str, ativo_host, ativo_res, ativo_loc, tipo_str, dado_ext
     id_num = int(id_str)
     tipo_str = tipo_str.strip().upper()
 
-    try:
-        match tipo_str:
-            case "NOTEBOOK":
-                ram = int(dado_extra) if dado_extra.strip() else 8
-                novo_ativo = Notebook(id_num, ativo_host, ativo_res, ativo_loc, ram)
-                
-            case "SERVIDOR":
-                so = str(dado_extra).strip() if dado_extra.strip() else "Linux"
-                novo_ativo = Servidor(id_num, ativo_host, ativo_res, ativo_loc, so)
-                
-            case "ROTEADOR":
-                fw = str(dado_extra).strip().upper()
-                fw_atualizado = True if fw == 'S' else False
-                novo_ativo = Roteador(id_num, ativo_host, ativo_res, ativo_loc, fw_atualizado)
-                
-            case "DESKTOP":
-                ram = int(dado_extra) if dado_extra.strip() else 8
-                novo_ativo = Desktop(id_num, ativo_host, ativo_res, ativo_loc, ram)
-                
-            case _:
-                print("\nErro: Tipo de ativo inválido. Escolha NOTEBOOK, SERVIDOR, ROTEADOR ou DESKTOP.")
-                return False
-                
-    except ValueError:
-        print("\nErro: O dado extra está no formato incorreto (Ex: RAM deve ser número).")
-        return False
+    dados_brutos = {
+        'id': id_num,
+        'nome': ativo_host,
+        'responsavel': ativo_res,
+        'local': ativo_loc,
+        'dado_extra': dado_extra
+    }
+
+    novo_ativo = Equipamento.fabricar_ativo(tipo_str, dados_brutos)
 
     if not novo_ativo:
-        print("\nErro: Falha ao instanciar o objeto ativo.")
+        print("\nErro: Falha ao instanciar o objeto. Verifique o tipo ou formato do dado extra.")
         return False
-
 
     novo_ativo.tipo = tipo_str
 
