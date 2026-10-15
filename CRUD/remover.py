@@ -18,19 +18,19 @@ def remover_ativo(id_busca):
         dados = db_inventario[id_busca]
         ativo_obj = Equipamento.fabricar_ativo(dados.get('tipo'), dados)
         
-        # Proteção caso a fábrica falhe em ler o tipo
         if ativo_obj:
             ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])
             print("\nVocê acabou de remover o seguinte equipamento permanentemente:")
             ativo_obj.exibir_informacoes()
             print("=" * 45)
         
-        # --- CORREÇÃO CRÍTICA: LIMPANDO DEPENDÊNCIAS ÓRFÃS ---
-        # Varre todo o banco e remove o ID deste ativo das listas de dependências dos outros
+        # --- CORREÇÃO CRÍTICA ---
         for key, asset_data in db_inventario.items():
             if 'dependencias' in asset_data:
-                if id_busca in asset_data['dependencias']:
-                    asset_data['dependencias'].remove(id_busca)
+                asset_data['dependencias'] = [
+                    dependencia for dependencia in asset_data['dependencias']
+                    if str(dependencia.get('id_alvo', '')) != id_busca
+                ]
 
         del db_inventario[id_busca]
         salvar_db(db_inventario)
