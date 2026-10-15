@@ -1,21 +1,41 @@
-# =====================================================================
-# NOTA DE NOMENCLATURA PESSOAL:
-# 'db'  -> Simplificação de "banco_de_dados"
-# 'arq' -> Simplificação de "arquivos" ou "arquivo"
-# =====================================================================
+### =====================================================================
+### NOTA DE NOMENCLATURA PESSOAL:
+### 'db'  -> Simplificação de "banco_de_dados"
+### 'arq' -> Simplificação de "arquivos" ou "arquivo"
+### =====================================================================
 
 from persistencia import ler_db, salvar_db
 from ativos import Equipamento
 
-def registrar_vulnerabilidade():
+def corrigir_vulnerabilidade(id_busca, cve_alvo):
     db_inventario = ler_db()
-    
-    print("\n--- REGISTRAR NOVA VULNERABILIDADE ---")
-    id_busca = input("Digite o ID numérico do ativo que possui a falha: ").strip()
-    
+    id_busca = str(id_busca).strip()
+    cve_alvo = str(cve_alvo).strip().upper()
+
     if id_busca in db_inventario:
         dados = db_inventario[id_busca]
+        vulns = dados.get('vulnerabilidades', [])
+        encontrou = False
         
+        for v in vulns:
+            if v.get('cve', '').upper() == cve_alvo:
+                v['status'] = 'corrigida'
+                encontrou = True
+                
+        if encontrou:
+            db_inventario[id_busca]['vulnerabilidades'] = vulns
+            salvar_db(db_inventario)
+            return True
+            
+    return False
+
+def registrar_vulnerabilidade(id_busca, cve_input, descricao, categoria, sev, stat): 
+    db_inventario = ler_db()
+    
+    id_busca = str(id_busca).strip()
+
+    if id_busca in db_inventario:
+        dados = db_inventario[id_busca]
         ativo_obj = Equipamento.fabricar_ativo(dados.get('tipo'), dados)
         
         if ativo_obj:
@@ -26,34 +46,48 @@ def registrar_vulnerabilidade():
             
             vul = {}
             
-            cve_input = input("Digite o código CVE (ou pressione Enter se não possuir): ").strip().upper()
+            # Tratamento do CVE (Pode ser vazio/N/A)
+            cve_input = str(cve_input).strip().upper()
             vul['cve'] = cve_input if cve_input != "" else "N/A"
             
-            vul['descricao'] = input("Descrição da fragilidade (Ex: Senha fraca, porta aberta): ").strip()
-            vul['categoria'] = input("Categoria (Ex: Rede, Software, Hardware): ").strip()
+            # Validação da Descrição
+            descricao = str(descricao).strip()
+            if not descricao:
+                print("\n[ERRO] A descrição da fragilidade não pode ficar vazia.")
+                return False
+            vul['descricao'] = descricao
             
+            # Validação da Categoria
+            categoria = str(categoria).strip()
+            if not categoria:
+                print("\n[ERRO] A categoria não pode ficar vazia.")
+                return False
+            vul['categoria'] = categoria
+            
+            # Validação da Severidade (Mantendo a sua tupla original)
+            sev = str(sev).strip().lower()
             severidades_validas = ("baixa", "media", "alta", "critica")
-            while True:
-                sev = input("Severidade (baixa, media, alta, critica): ").strip().lower()
-                if sev in severidades_validas:
-                    vul['severidade'] = sev
-                    break
-                print("Erro: Digite uma severidade válida da lista.")
+            if sev not in severidades_validas:
+                print(f"\n[ERRO] Severidade inválida. Digite uma destas: {severidades_validas}")
+                return False
+            vul['severidade'] = sev
                 
+            # Validação do Status (Mantendo a sua tupla original)
+            stat = str(stat).strip().lower()
             status_validos = ("aberta", "em tratamento", "corrigida", "aceita")
-            while True:
-                stat = input("Status (aberta, em tratamento, corrigida, aceita): ").strip().lower()
-                if stat in status_validos:
-                    vul['status'] = stat
-                    break
-                print("Erro: Digite um status válido da lista.")
+            if stat not in status_validos:
+                print(f"\n[ERRO] Status inválido. Digite um destes: {status_validos}")
+                return False
+            vul['status'] = stat
                         
+            # Se passou em todas as regras, adiciona e salva
             ativo_obj.adicionar_vulnerabilidade(vul)
-            
             db_inventario[id_busca] = ativo_obj.__dict__
             salvar_db(db_inventario)
             
-            print(f"\nSucesso: Vulnerabilidade registrada e vinculada ao ativo '{ativo_obj.nome}' no db!")
+            print(f"\n[SISTEMA] Sucesso: Vulnerabilidade registrada e vinculada ao ativo '{ativo_obj.nome}' no db!")
+            return True
         
     else:
-        print("\nErro: Nenhum ativo encontrado com esse ID no db. Cadastre o ativo primeiro.")
+        print("\n[ERRO] Nenhum ativo encontrado com esse ID no db. Cadastre o ativo primeiro.")
+        return False

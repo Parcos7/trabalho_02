@@ -1,96 +1,54 @@
 # =====================================================================
 # NOTA DE NOMENCLATURA PESSOAL:
-# 'db'  -> Simplificação de "banco_de_dados" 
+# 'db'  -> Simplificação de "banco_de_dados"
 # 'arq' -> Simplificação de "arquivos" ou "arquivo"
 # 'resp' -> Simplificação de "Responsavel"
 # 'at' -> Simplificalção de "Atualizar"
 # =====================================================================
-
 from persistencia import ler_db, salvar_db
 from ativos import Equipamento
 
-def atualizar_ativo():
+def atualizar_ativo(id_busca, novo_resp="", novo_local="", dep_alvo="", dep_fracao=""):
     db_inventario = ler_db()
     
-    print("\n--- ATUALIZAR ATIVO DE TI ---")
-    id_busca = input("Digite o ID numérico do ativo que deseja atualizar: ").strip()
-    
-    if id_busca in db_inventario:
-        dados = db_inventario[id_busca]
-        ativo_obj = Equipamento.fabricar_ativo(dados.get('tipo'), dados)
-        ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])
-        
-        print(f"\n[ ATIVO ENCONTRADO: {ativo_obj.nome} ]")
-        
-        while True:   
-            print("="*45)
-            print("1 - Nome do responsavel" \
-            "\n2 - Localidade" \
-            "\n3 - Adicionar Dependência"\
-            "\n0 - Cancelar")
-            print("="*45)
-
-            try:
-                opcao_at = int(input("Digite o número da opção: "))
-            except ValueError:
-                print("\nErro: Digite um número válido do menu.\n")
-                continue             
-
-            match opcao_at:
-                case 1:
-                    print(f"Responsável atual: {ativo_obj.responsavel}")
-                    while True:
-                        try:
-                            novo_resp = input("Digite o novo responsável (ou aperte Enter para manter o atual): ").strip().title()                                              
-                            if novo_resp == "":
-                                print("Nenhuma alteração feita.")
-                                break 
-                            elif not novo_resp.replace(" ", "").isalpha():                            
-                                raise ValueError("O nome do responsavel não pode ter numeros ou simbolos.")                             
-                            ativo_obj.responsavel = novo_resp
-                            break
-                        except ValueError as erro:
-                            print(f"\nErro: {erro}\n") 
-                    
-                case 2:
-                    print(f"Localização atual: {ativo_obj.local}")
-                    while True:
-                        try:    
-                            novo_local = input("Digite a nova localização (ou aperte Enter para manter a atual): ").strip().title()
-                            
-                            if novo_local == "":
-                                print("Nenhum local foi alterado.\n")
-                                break
-                            elif not novo_local.replace(" ", "").isalpha():
-                                raise ValueError ("A localidade não pode conter números. Tente novamente.")
-                            ativo_obj.local = novo_local
-                            break
-                        except ValueError as erro:
-                            print(f"\nErro: {erro}\n")
-                case 3:
-                    id_dependencia = input("Digite o ID do equipamento do qual este ativo depende: ").strip()
-                    if id_dependencia in db_inventario and id_dependencia != id_busca:
-                        fracao = float(input("Digite a fração de risco transmitida (ex: 0.3 para 30%): "))
-                        if 0 <= fracao < 1:
-                            ativo_obj.dependencias.append({'id_alvo': id_dependencia, 'fracao': fracao})
-                            print("Dependência registrada.")
-                        else:
-                            print("Erro: A fração deve estar no intervalo [0, 1).")
-                    else:
-                        print("Erro: ID inválido ou igual ao próprio equipamento.")
-                    break         
-                    
-                case 0:
-                    print("\nAtualizaçãno cancelada.\n")
-                    break
-                    
-                case _:
-                    print("\nErro: Opção inválida. Escolha 1, 2 ou 0.\n")
-                    
-        if opcao_at != 0:
-            db_inventario[id_busca] = ativo_obj.__dict__
-            salvar_db(db_inventario)
-            print(f"\nSucesso: O ativo '{ativo_obj.nome}' foi atualizado no db!")
-            
-    else:
+    if id_busca not in db_inventario:
         print("\nErro: Nenhum ativo encontrado com esse ID no db.")
+        return False
+
+    dados = db_inventario[id_busca]
+    ativo_obj = Equipamento.fabricar_ativo(dados.get('tipo'), dados)
+    ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])
+    ativo_obj.dependencias = dados.get('dependencias', [])
+
+    print(f"\n[ ATIVO ENCONTRADO: {ativo_obj.nome} ]")
+
+    if novo_resp.strip():
+        novo_resp_formatado = novo_resp.strip().title()
+        if not novo_resp_formatado.replace(" ", "").isalpha():
+            print("\nErro: O nome do responsavel não pode ter numeros ou simbolos.")
+            return False 
+        ativo_obj.responsavel = novo_resp_formatado
+
+    if novo_local.strip():
+        novo_local_formatado = novo_local.strip().title()
+        if not novo_local_formatado.replace(" ", "").isalpha():
+            print("\nErro: A localidade não pode conter números. Tente novamente.")
+            return False
+        ativo_obj.local = novo_local_formatado
+
+    # --- HERANÇA DE RISCO ---
+    if dep_alvo.strip() and dep_fracao.strip():
+        try:
+            frac = float(dep_fracao.strip())
+            ativo_obj.dependencias.append({
+                "id_alvo": dep_alvo.strip(),
+                "fracao": frac
+            })
+        except ValueError:
+            print("\nErro: Fração de dependência inválida.")
+            return False
+
+    db_inventario[id_busca] = ativo_obj.__dict__
+    salvar_db(db_inventario)
+    print(f"\nSucesso: O ativo '{ativo_obj.nome}' foi atualizado no db!")
+    return True

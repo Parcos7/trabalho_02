@@ -16,8 +16,12 @@ class TipoAtivo(Enum):
 nome_db = 'inventario_db.json'
 
 def ler_db():
+    """
+    Lê o banco de dados JSON (array de objetos) e retorna um dicionário 
+    em memória com chave = id_str e valor = dicionário de dados do ativo.
+    """
     try:
-        with open(nome_db, 'r') as arq_leitura:
+        with open(nome_db, 'r', encoding='utf-8') as arq_leitura:
             dados_lista = json.load(arq_leitura)
             
             db_em_memoria = {}
@@ -28,23 +32,30 @@ def ler_db():
             return db_em_memoria
             
     except FileNotFoundError:
-        print("Aviso: arquivo do db não encontrado. Iniciando uma nova base vazia.")
+        # É normal não achar o arquivo na primeira vez que o programa roda.
+        # Retorna dicionário vazio silenciosamente. A interface não precisa de erro aqui.
         return {}
         
-    except json.JSONDecodeError:
-        print("Erro crítico: O arquivo do db está corrompido.")
-        return {}
+    except json.JSONDecodeError as erro:
+        # Lança a exceção para PARAR o programa. 
+        # Impede que a interface sobrescreva um DB corrompido com uma base vazia.
+        raise ValueError(f"Arquivo de banco de dados corrompido. Faça backup antes de continuar. Detalhes: {erro}")
         
     except Exception as erro:
-        print(f"Erro inesperado ao ler o arquivo do db: {erro}")
-        return {}
+        raise RuntimeError(f"Erro inesperado ao ler o arquivo do banco de dados: {erro}")
 
 def salvar_db(db_atualizado):
+    """
+    Recebe o dicionário em memória, converte seus valores para uma lista
+    (array de objetos) e salva no arquivo JSON.
+    """
     try:
-        with open(nome_db, 'w') as arq_escrita:
-            dados_lista = list(db_atualizado.values())
-            
-            json.dump(dados_lista, arq_escrita, indent=4)
+        # Extrai apenas os valores (os dicionários dos equipamentos) para formar a lista final
+        dados_lista = list(db_atualizado.values())
+        
+        with open(nome_db, 'w', encoding='utf-8') as arq_escrita:
+            # ensure_ascii=False garante que acentos fiquem legíveis no JSON
+            json.dump(dados_lista, arq_escrita, indent=4, ensure_ascii=False)
             
     except Exception as erro:
-        print(f"Erro ao tentar gravar no arquivo do db: {erro}")
+        raise RuntimeError(f"Erro ao tentar gravar no arquivo do banco de dados: {erro}")

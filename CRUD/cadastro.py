@@ -1,123 +1,123 @@
 # =====================================================================
 # NOTA DE NOMENCLATURA PESSOAL:
 # 'db'  -> Simplificação de "base de dados"
-# 'arq' -> Simplificação de "ficheiros" ou "ficheiro"
-# 'res' -> Simplificação de "Responsavel"
-# 'loc' -> Simplificação de "Localidade"
-# 'fw' -> Simplificação de "firmware"
-# 'so' -> Simplificação de "Sistema Operacional"
+# 'arq' -> Simplificação de "arquivos" ou "arquivo"
+# 'resp' -> Simplificação de "Responsavel"
+# 'cad' -> Simplificação de "Cadastrar"
 # =====================================================================
+from persistencia import ler_db, salvar_db
+from ativos import Notebook, Servidor, Roteador, Desktop
 
-from persistencia import ler_db, salvar_db, TipoAtivo
-from ativos import Servidor, Roteador, Notebook, Desktop
+def amarrar_dependencia_automatica(novo_ativo_obj, db_inventario, tipo_ativo):
+    if not novo_ativo_obj:
+        return
 
-def cadastrar_ativo():
+    tipo = str(tipo_ativo).upper()
+    
+    if tipo == "SERVIDOR":
+        return
+
+    alvo_desejado = ""
+    if tipo in ["NOTEBOOK", "DESKTOP"]:
+        alvo_desejado = "ROTEADOR"
+    elif tipo == "ROTEADOR":
+        alvo_desejado = "SERVIDOR"
+
+
+    for id_existente, dados in db_inventario.items():
+        if dados.get("tipo", "").upper() == alvo_desejado:
+
+            novo_ativo_obj.dependencias.append({
+                "id_alvo": str(id_existente),
+                "fracao": 1.0
+            })
+            print(f"[*] AUTO-TOPOLOGIA: {novo_ativo_obj.nome} conectado a {dados.get('nome')} (ID: {id_existente})")
+            break
+
+def cadastrar_ativo(id_str, ativo_host, ativo_res, ativo_loc, tipo_str, dado_extra):
     db_inventario = ler_db()
     
-    print("\n--- REGISTO DE NOVO ATIVO ---")
-
-    while True:
-        try:
-            id_num = int(input("Digite o ID numérico do ativo de TI: "))
-            id_str = str(id_num)  
-            
-            if id_str in db_inventario:
-                print("Erro: Este ID já existe na db. Tente outro.")
-                continue
-            break
-        except ValueError:
-            print("Erro: O ID deve ser um número inteiro. Tente novamente.")
-            
-    ativo_host = ""
-    while ativo_host == "":
-        print("="*45)
-        print("Padrão da empresa:\n" \
-            "Notebook = NOTP(Seguido do património)\n" \
-            "Servidor = SERV(Seguido do patrimônio)\n" \
-            "Desktop = MICP(Seguido do patrimônio)\n" \
-            "Roteadores = ROTP(Seguido do patrimônio)\n")
-        print("="*45)
+    if not id_str.isdigit():
+        print("\nErro: O ID deve ser um número inteiro. Tente novamente.")
+        return False
         
-        pre_validos = ("notp", "serv", "micp", "rotp")
-        try:
-            ativo_host = input("Digite o hostname do equipamento: ").strip().lower()
-
-            if ativo_host == "":
-                raise ValueError(" O campo hostname não pode ficar vazio.")
-            for item in db_inventario.values():
-                if item.get('nome') == ativo_host:
-                    raise ValueError("Valor duplicado. Tente novamente.")
-            if not ativo_host.startswith(pre_validos):
-                raise ValueError("Hostname fora do padrão. Inicie com NOTP, SERV, MICP ou ROTP") 
-                
-        except ValueError as erro:
-            print(f"\nErro:{ erro}\n")
-            ativo_host = ""
-
-    ativo_res = ""
-    while ativo_res == "":
-        try:        
-            ativo_res = input("Digite o nome do responsável: ").strip().title()
-            if ativo_res == "":
-                raise ValueError("O campo responsável não pode ficar vazio.\n")
-            elif not ativo_res.replace(" ", "").isalpha():
-                raise ValueError("O responsável não pode ter números ou símbolos.\n")
-        except ValueError as erro:
-            print(f"\nErro: {erro}\n")
-            ativo_res = ""
-
-    ativo_loc = ""
-    while ativo_loc == "":
-        try:
-            ativo_loc = input("Digite a localização do ativo: ").strip().title()
-            if ativo_loc == "":
-                raise ValueError("Localidade não pode estar vazia")
-            elif not ativo_loc.replace(" ", "").isalpha():
-                raise ValueError("A localização não pode ficar vazia ou ter números e símbolos")       
-        except ValueError as erro:
-            print(f"\nErro:{erro}\n")
-            ativo_loc = ""
-
-    print("\nTipos de Ativos disponíveis:")
-    for tipo in TipoAtivo:
-        print(f"{tipo.value} - {tipo.name}")
+    if id_str in db_inventario:
+        print("\nErro: Este ID já existe na db. Tente outro.")
+        return False
         
+    ativo_host = ativo_host.strip().lower()
+    if ativo_host == "":
+        print("\nErro: O campo hostname não pode ficar vazio.")
+        return False
+        
+    for item in db_inventario.values():
+        if item.get('nome') == ativo_host:
+            print("\nErro: Valor duplicado. Tente novamente.")
+            return False
+            
+    pre_validos = ("notp", "serv", "micp", "rotp")
+    if not ativo_host.startswith(pre_validos):
+        print("\nErro: Hostname fora do padrão. Inicie com NOTP, SERV, MICP ou ROTP")
+        return False
+
+    ativo_res = ativo_res.strip().title()
+    if ativo_res == "":
+        print("\nErro: O campo responsável não pode ficar vazio.")
+        return False
+    elif not ativo_res.replace(" ", "").isalpha():
+        print("\nErro: O responsável não pode ter números ou símbolos.")
+        return False
+
+    ativo_loc = ativo_loc.strip().title()
+    if ativo_loc == "":
+        print("\nErro: Localidade não pode estar vazia")
+        return False
+    elif not ativo_loc.replace(" ", "").isalpha():
+        print("\nErro: A localização não pode ficar vazia ou ter números e símbolos")
+        return False
+
     novo_ativo = None
-    
-    while True:
-        try:
-            escolha = int(input("Escolha o número correspondente ao tipo: "))
-        
-            match escolha:
-                case TipoAtivo.NOTEBOOK.value:
-                    ram = int(input("Digite a quantidade de memória RAM (GB): "))
-                    novo_ativo = Notebook(id_num, ativo_host, ativo_res, ativo_loc, ram)
-                    break
+    id_num = int(id_str)
+    tipo_str = tipo_str.strip().upper()
+
+    try:
+        match tipo_str:
+            case "NOTEBOOK":
+                ram = int(dado_extra) if dado_extra.strip() else 8
+                novo_ativo = Notebook(id_num, ativo_host, ativo_res, ativo_loc, ram)
                 
-                case TipoAtivo.SERVIDOR.value:
-                    so = input("Digite o Sistema Operativo do Servidor: ").strip()
-                    novo_ativo = Servidor(id_num, ativo_host, ativo_res, ativo_loc, so)
-                    break
+            case "SERVIDOR":
+                so = str(dado_extra).strip() if dado_extra.strip() else "Linux"
+                novo_ativo = Servidor(id_num, ativo_host, ativo_res, ativo_loc, so)
                 
-                case TipoAtivo.ROTEADOR.value:
-                    fw = input("O firmware está atualizado? (S/N): ").strip().upper()
-                    fw_atualizado = True if fw == 'S' else False
-                    novo_ativo = Roteador(id_num, ativo_host, ativo_res, ativo_loc, fw_atualizado)
-                    break
+            case "ROTEADOR":
+                fw = str(dado_extra).strip().upper()
+                fw_atualizado = True if fw == 'S' else False
+                novo_ativo = Roteador(id_num, ativo_host, ativo_res, ativo_loc, fw_atualizado)
                 
-                case TipoAtivo.DESKTOP.value:
-                    ram = int(input("Digite a quantidade de memória RAM (GB) da máquina base: "))
-                    novo_ativo = Desktop(id_num, ativo_host, ativo_res, ativo_loc, ram) 
-                    break
-                case _:
-                    print("\nErro: Número fora da lista.\n")
+            case "DESKTOP":
+                ram = int(dado_extra) if dado_extra.strip() else 8
+                novo_ativo = Desktop(id_num, ativo_host, ativo_res, ativo_loc, ram)
                 
-        except ValueError:
-            print("\nErro: Digite um dos números da lista ou garanta que os dados extra estão corretos.\n")
+            case _:
+                print("\nErro: Tipo de ativo inválido. Escolha NOTEBOOK, SERVIDOR, ROTEADOR ou DESKTOP.")
+                return False
+                
+    except ValueError:
+        print("\nErro: O dado extra está no formato incorreto (Ex: RAM deve ser número).")
+        return False
+
+    if not novo_ativo:
+        print("\nErro: Falha ao instanciar o objeto ativo.")
+        return False
+
+
+    novo_ativo.tipo = tipo_str
+
+    amarrar_dependencia_automatica(novo_ativo, db_inventario, tipo_str)
 
     db_inventario[id_str] = novo_ativo.__dict__
-    
     salvar_db(db_inventario)
 
-    print(f"\nSucesso: Ativo '{novo_ativo.nome}' \
-        (Objeto {novo_ativo.__class__.__name__}) registado e guardado na db!")
+    print(f"\nSucesso: Ativo '{novo_ativo.nome}' registrado e guardado na db!")
+    return True
