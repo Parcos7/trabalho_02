@@ -10,7 +10,6 @@ from CRUD.cadastro import cadastrar_ativo
 from CRUD.atualizar import atualizar_ativo
 from CRUD.remover import remover_ativo
 from vulnerabilidades import CATALOGO_VULNERABILIDADES, registrar_vulnerabilidade, corrigir_vulnerabilidade
-from CRUD.risco import calcular_risco_global
 from CRUD.risco_salas import calcular_relatorio_risco_por_sala
 from integracoes.nvd_api import NvdCveSearchWorker
 
