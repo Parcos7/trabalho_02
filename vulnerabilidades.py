@@ -14,7 +14,7 @@ CATALOGO_VULNERABILIDADES = (
         'cve': 'N/A',
         'descricao': 'Senha fraca',
         'categoria': 'Autenticação',
-        'severidade': 'alta'
+        'severidade': 'baixa'
     },
     {
         'id': 'credencial_padrao',
@@ -22,7 +22,7 @@ CATALOGO_VULNERABILIDADES = (
         'cve': 'N/A',
         'descricao': 'Credenciais padrão',
         'categoria': 'Autenticação',
-        'severidade': 'alta'
+        'severidade': 'media'
     },
     {
         'id': 'heartbleed',

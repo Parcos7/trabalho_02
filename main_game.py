@@ -11,6 +11,7 @@ from CRUD.atualizar import atualizar_ativo
 from CRUD.remover import remover_ativo
 from vulnerabilidades import CATALOGO_VULNERABILIDADES, registrar_vulnerabilidade, corrigir_vulnerabilidade
 from CRUD.risco import calcular_risco_global
+from CRUD.risco_salas import calcular_relatorio_risco_por_sala
 from integracoes.nvd_api import NvdCveSearchWorker
 
 # ==========================================
@@ -45,7 +46,7 @@ COR_PAINEL_BORDA = (0, 255, 0)
 # SESSÃO: COMPONENTES DE INTERFACE (UI)
 # ==========================================
 class CaixaTexto:
-    def __init__(self, x, y, largura, altura, rotulo, somente_leitura=False):
+    def __init__(self, x, y, largura, altura, rotulo, somente_leitura=False, somente_digitos=False, prefixo=""):
         self.rect = pygame.Rect(x, y, largura, altura)
         self.cor_ativa = COR_CIANO_NEON
         self.cor_inativa = (40, 58, 85)
@@ -53,6 +54,8 @@ class CaixaTexto:
         self.texto = ''
         self.rotulo = rotulo
         self.somente_leitura = somente_leitura
+        self.somente_digitos = somente_digitos
+        self.prefixo = prefixo
         self.ativo = False
         self.fonte = pygame.font.SysFont("Consolas", 14)
 
@@ -71,7 +74,7 @@ class CaixaTexto:
                 pass 
             else:
                 char = evento.unicode
-                if char and char not in ['´', '`', '~', '^', '¨']:
+                if char and char not in ['´', '`', '~', '^', '¨'] and (not self.somente_digitos or char.isdigit()):
                     self.texto += char
 
     def desenhar(self, tela):
@@ -79,9 +82,11 @@ class CaixaTexto:
         pygame.draw.rect(tela, self.cor, self.rect, 2)
 
         texto = self.texto if self.texto else self.rotulo
+        if self.prefixo:
+            texto = f"Hostname / patrimônio: {self.prefixo}{self.texto or '####'}"
         if self.somente_leitura and self.texto:
             texto = f"{self.rotulo}: {self.texto}"
-        cor_texto = COR_TEXTO if self.texto else COR_TEXTO_MUTED
+        cor_texto = COR_TEXTO if self.texto or self.prefixo else COR_TEXTO_MUTED
         largura_util = self.rect.width - 16
         linhas = [""]
         for caractere in texto:
@@ -308,6 +313,7 @@ class App:
         self.rects_ativos_vuln = []
         self.rects_matriz_risco = []
         self.rects_ativos_crud = []
+        self.scroll_resultados_consulta = 0
         
         self.historico_logs = []
         self.scroll_logs = 0
@@ -331,12 +337,26 @@ class App:
         self.mensagem_status = ""
         self.cor_status = COR_TEXTO
         
-        self.cad_id = CaixaTexto(300, 175, 300, 28, "ID (Apenas Números)")
-        self.cad_host = CaixaTexto(300, 220, 300, 28, "Hostname (Ex: NOTP01)")
+        self.prefixos_hostname = {
+            "NOTEBOOK": "notp",
+            "SERVIDOR": "serv",
+            "DESKTOP": "micp",
+            "ROTEADOR": "rotp"
+        }
+        self.cad_tipo = CaixaSelecao(
+            300, 175, 300, 28, "Tipo de ativo",
+            [("Notebook", "NOTEBOOK"), ("Servidor", "SERVIDOR"), ("Desktop", "DESKTOP"), ("Roteador", "ROTEADOR")],
+            "NOTEBOOK"
+        )
+        self.cad_host = CaixaTexto(300, 220, 300, 28, "Sufixo do hostname", somente_digitos=True, prefixo="notp")
         self.cad_resp = CaixaTexto(300, 265, 300, 28, "Responsável (Sem números)")
-        self.cad_loc = CaixaTexto(300, 310, 300, 28, "Localidade")
+        opcoes_salas = [(f"Sala {letra}", f"Sala {letra}") for letra in "ABCD"]
+        opcoes_salas.append(("+ Nova sala...", "__NOVA_SALA__"))
+        self.cad_loc = CaixaSelecao(300, 310, 300, 28, "Localidade", opcoes_salas, "Sala A")
+        self.cad_sala_nova = CaixaTexto(300, 310, 300, 28, "Nome da nova sala")
         self.cad_extra = CaixaTexto(300, 355, 300, 28, "Dado Extra (SO, RAM ou FW)")
-        self.campos_cad = [self.cad_id, self.cad_host, self.cad_resp, self.cad_loc, self.cad_extra]
+        self.campos_cad = [self.cad_tipo, self.cad_host, self.cad_resp, self.cad_loc, self.cad_extra]
+        self._atualizar_rotulo_dado_extra()
 
         self.upd_id = CaixaTexto(300, 200, 300, 32, "ID ou Hostname do Ativo")
         self.upd_resp = CaixaTexto(300, 250, 300, 32, "Novo Responsável (Opcional)")
@@ -345,6 +365,8 @@ class App:
 
         self.rem_id = CaixaTexto(300, 250, 300, 32, "ID ou Hostname do Ativo")
         self.campos_rem = [self.rem_id]
+        self.consulta_busca = CaixaTexto(300, 175, 690, 28, "Buscar usuário, hostname ou patrimônio")
+        self.ativo_consulta_selecionado = None
 
         opcoes_vulnerabilidade = [("Selecione uma vulnerabilidade", "")]
         opcoes_vulnerabilidade.extend((item['nome'], item['id']) for item in CATALOGO_VULNERABILIDADES)
@@ -495,6 +517,54 @@ class App:
         self.vuln_modelo.limpar_busca()
         self.vuln_modelo.definir_valor("")
 
+    def _atualizar_rotulo_dado_extra(self):
+        rotulos = {
+            "NOTEBOOK": "Memória RAM (GB)",
+            "DESKTOP": "Memória RAM (GB)",
+            "SERVIDOR": "Sistema operacional",
+            "ROTEADOR": "Firmware atualizado? (S/N)"
+        }
+        self.cad_extra.rotulo = rotulos.get(self.cad_tipo.texto, "Dado extra")
+
+    def _atualizar_opcoes_salas(self):
+        salas = [f"Sala {letra}" for letra in "ABCD"]
+        salas_existentes = {
+            str(ativo.get('local', '')).strip()
+            for ativo in self.ativos_brutos
+            if str(ativo.get('local', '')).strip()
+        }
+        salas.extend(sorted(
+            (sala for sala in salas_existentes if sala.casefold() not in {item.casefold() for item in salas}),
+            key=str.casefold
+        ))
+        opcoes = [(sala, sala) for sala in salas]
+        opcoes.append(("+ Nova sala...", "__NOVA_SALA__"))
+        valor_atual = self.cad_loc.texto
+        self.cad_loc.definir_opcoes(opcoes)
+        if valor_atual not in {valor for _, valor in opcoes}:
+            valor_atual = "Sala A"
+        self.cad_loc.definir_valor(valor_atual)
+
+    def _campos_cadastro_ativos(self):
+        campo_local = self.cad_sala_nova if self.cad_loc.texto == "__NOVA_SALA__" else self.cad_loc
+        return [self.cad_tipo, self.cad_host, self.cad_resp, campo_local, self.cad_extra]
+
+    def _localidade_cadastro(self):
+        if self.cad_loc.texto == "__NOVA_SALA__":
+            return self.cad_sala_nova.texto.strip()
+        return self.cad_loc.texto
+
+    def _ativos_filtrados(self):
+        termo = self.consulta_busca.texto.strip().casefold()
+        if not termo:
+            return list(self.ativos_brutos)
+        return [
+            ativo for ativo in self.ativos_brutos
+            if termo in str(ativo.get('nome', '')).casefold()
+            or termo in str(ativo.get('responsavel', '')).casefold()
+            or termo in str(ativo.get('id', '')).casefold()
+        ]
+
     def sincronizar_dados(self):
         db_inventario = ler_db()
         self.lista_ativos_display = []
@@ -535,6 +605,17 @@ class App:
             
             linha = f"ID: {dados['id']} | HOST: {dados.get('nome',''):<10} | STATUS: {status_txt}"
             self.lista_ativos_display.append(linha)
+
+        self._atualizar_opcoes_salas()
+        ativos_filtrados = self._ativos_filtrados()
+        id_selecionado = (
+            str(self.ativo_consulta_selecionado.get('id', ''))
+            if self.ativo_consulta_selecionado else ""
+        )
+        self.ativo_consulta_selecionado = next(
+            (ativo for ativo in ativos_filtrados if str(ativo.get('id', '')) == id_selecionado),
+            ativos_filtrados[0] if ativos_filtrados else None
+        )
             
         if max_peso == 1:
             self.cor_alerta_atual = COR_AMBAR 
@@ -558,7 +639,7 @@ class App:
             self.servidor_foco_painel = servidores_ids[0] if servidores_ids else None
             
         try:
-            self.relatorio_risco = calcular_risco_global()
+            self.relatorio_risco = calcular_relatorio_risco_por_sala()
         except Exception as e:
             self.relatorio_risco = [
                 "[ERRO CRÍTICO] Falha ao calcular a Matriz de Risco.",
@@ -593,6 +674,12 @@ class App:
                     self.aba_crud_ativa = "REMOVER"
                     self.mensagem_status = ""
 
+                if self.aba_crud_ativa == "LISTAR":
+                    for r_item, dados in self.rects_ativos_crud:
+                        if r_item.collidepoint(pos_mouse):
+                            self.ativo_consulta_selecionado = dados
+                            return
+
                 if self.aba_crud_ativa in ["ATUALIZAR", "REMOVER"]:
                     for r_item, d in self.rects_ativos_crud:
                         if r_item.collidepoint(pos_mouse):
@@ -605,39 +692,68 @@ class App:
                             self.definir_mensagem(f"ALVO SELECIONADO: {d['nome']}. Dispare a ação.", COR_AMBAR)
                             return
 
-                if pygame.Rect(320, 520, 340, 44).collidepoint(pos_mouse):
-                    if self.aba_crud_ativa == "LISTAR":
-                        self.sincronizar_dados()
-                        self.definir_mensagem("Dados atualizados do JSON.", COR_CIANO_NEON)
-                        
-                    elif self.aba_crud_ativa == "CADASTRAR":
+                if self.aba_crud_ativa != "LISTAR" and pygame.Rect(320, 520, 340, 44).collidepoint(pos_mouse):
+                    if self.aba_crud_ativa == "CADASTRAR":
                         resp_limpo = self.cad_resp.texto.strip()
-                        loc_limpo = self.cad_loc.texto.strip()
+                        loc_limpo = self._localidade_cadastro()
+                        patrimonio = self.cad_host.texto.strip()
+                        tipo_ativo = self.cad_tipo.texto
+
+                        if not patrimonio.isdigit() or len(patrimonio) < 4:
+                            self.definir_mensagem("O patrimônio deve ter pelo menos 4 dígitos.", COR_VERMELHO_NEON)
+                            return
+                        patrimonio_normalizado = str(int(patrimonio))
+                        if any(str(ativo.get('id', '')) == patrimonio_normalizado for ativo in self.ativos_brutos):
+                            self.definir_mensagem(f"Patrimônio {patrimonio} já cadastrado. Informe outro.", COR_VERMELHO_NEON)
+                            return
                         if any(char.isdigit() for char in resp_limpo):
                             self.definir_mensagem("ERRO VALIDAÇÃO: O responsável não pode ter números.", COR_VERMELHO_NEON)
                             return
-                        if any(char.isdigit() for char in loc_limpo):
-                            self.definir_mensagem("ERRO VALIDAÇÃO: A localidade não pode conter números.", COR_VERMELHO_NEON)
+                        local_sem_formatacao = loc_limpo.replace(" ", "").replace("-", "")
+                        if not local_sem_formatacao.isalnum():
+                            self.definir_mensagem("ERRO VALIDAÇÃO: A localidade aceita letras, números, espaços e hífens.", COR_VERMELHO_NEON)
                             return
 
-                        host = self.cad_host.texto.lower().strip()
-                        tipo_auto = ""
-                        if host.startswith("notp"): tipo_auto = "NOTEBOOK"
-                        elif host.startswith("serv"): tipo_auto = "SERVIDOR"
-                        elif host.startswith("micp"): tipo_auto = "DESKTOP"
-                        elif host.startswith("rotp"): tipo_auto = "ROTEADOR"
-                        
-                        if not tipo_auto:
-                            self.definir_mensagem("ERRO: O Hostname deve iniciar com NOTP, SERV, MICP ou ROTP.", COR_VERMELHO_NEON)
+                        prefixo = self.prefixos_hostname[tipo_ativo]
+                        hostname = f"{prefixo}{patrimonio}"
+                        if any(str(ativo.get('nome', '')).casefold() == hostname.casefold() for ativo in self.ativos_brutos):
+                            self.definir_mensagem(f"Hostname {hostname} já cadastrado. Informe outro patrimônio.", COR_VERMELHO_NEON)
+                            return
+
+                        dado_extra = self.cad_extra.texto.strip()
+                        if tipo_ativo in ("NOTEBOOK", "DESKTOP") and (not dado_extra.isdigit() or int(dado_extra) < 1):
+                            self.definir_mensagem("Informe a memória RAM em GB usando um inteiro positivo.", COR_VERMELHO_NEON)
+                            return
+                        if tipo_ativo == "SERVIDOR" and not dado_extra:
+                            self.definir_mensagem("Informe o sistema operacional do servidor.", COR_VERMELHO_NEON)
+                            return
+                        if tipo_ativo == "ROTEADOR" and dado_extra.casefold() not in ("s", "sim", "atualizado", "yes", "y", "n", "não", "nao", "desatualizado", "no"):
+                            self.definir_mensagem("Informe S ou N para o estado do firmware.", COR_VERMELHO_NEON)
+                            return
+
+                        sucesso = cadastrar_ativo(
+                            patrimonio,
+                            hostname,
+                            self.cad_resp.texto,
+                            loc_limpo,
+                            tipo_ativo,
+                            self.cad_extra.texto
+                        )
+                        if sucesso:
+                            self.adicionar_log("CADASTRO", hostname.upper(), f"Ativo do tipo {tipo_ativo} inserido no inventário.")
+                            self.cad_host.texto = ""
+                            self.cad_resp.texto = ""
+                            self.cad_extra.texto = ""
+                            self.cad_sala_nova.texto = ""
+                            self.cad_tipo.definir_valor("NOTEBOOK")
+                            self.cad_host.prefixo = self.prefixos_hostname["NOTEBOOK"]
+                            self._atualizar_rotulo_dado_extra()
+                            self.definir_mensagem(f"SUCESSO: Ativo ({tipo_ativo}) cadastrado!", COR_VERDE_MATRIX)
                         else:
-                            sucesso = cadastrar_ativo(self.cad_id.texto, self.cad_host.texto, self.cad_resp.texto, self.cad_loc.texto, tipo_auto, self.cad_extra.texto)
-                            if sucesso:
-                                self.adicionar_log("CADASTRO", host.upper(), f"Ativo do tipo {tipo_auto} inserido no inventário.")
-                                for c in self.campos_cad: c.texto = ""
-                                self.definir_mensagem(f"SUCESSO: Ativo ({tipo_auto}) cadastrado!", COR_VERDE_MATRIX)
-                            else:
-                                self.definir_mensagem("ERRO: Dados duplicados, vazios ou incorretos.", COR_VERMELHO_NEON)
+                            self.definir_mensagem("Cadastro não concluído. Confira os dados informados.", COR_VERMELHO_NEON)
                         self.sincronizar_dados()
+                        if sucesso:
+                            self.cad_loc.definir_valor(loc_limpo)
                         
                     elif self.aba_crud_ativa == "ATUALIZAR":
                         resp_limpo = self.upd_resp.texto.strip()
@@ -830,9 +946,10 @@ class App:
 
         campos_ativos = []
         if self.modal_ativo == "NOTEBOOK_CRUD":
-            if self.aba_crud_ativa == "CADASTRAR": campos_ativos = self.campos_cad
+            if self.aba_crud_ativa == "CADASTRAR": campos_ativos = self._campos_cadastro_ativos()
             elif self.aba_crud_ativa == "ATUALIZAR": campos_ativos = self.campos_upd
             elif self.aba_crud_ativa == "REMOVER": campos_ativos = self.campos_rem
+            elif self.aba_crud_ativa == "LISTAR": campos_ativos = [self.consulta_busca]
         elif self.modal_ativo == "VULN_PATCH":
             campos_ativos = self.campos_vuln
 
@@ -853,6 +970,13 @@ class App:
                         self.scroll_crud_ativos -= evento.y
                         max_scroll = max(0, len(self.ativos_brutos) - 7)
                         self.scroll_crud_ativos = max(0, min(self.scroll_crud_ativos, max_scroll))
+
+                elif self.modal_ativo == "NOTEBOOK_CRUD" and self.aba_crud_ativa == "LISTAR":
+                    painel_resultados = pygame.Rect(290, 220, 340, 230)
+                    if painel_resultados.collidepoint(pos_mouse):
+                        self.scroll_resultados_consulta -= evento.y
+                        max_scroll = max(0, len(self._ativos_filtrados()) - 7)
+                        self.scroll_resultados_consulta = max(0, min(self.scroll_resultados_consulta, max_scroll))
                         
                 elif self.modal_ativo == "VULN_PATCH":
                     painel_ativos = pygame.Rect(600, 140, 400, 135)
@@ -891,6 +1015,17 @@ class App:
                 texto_anterior = campo.texto
                 filtro_anterior = campo.filtro if campo is self.vuln_modelo else None
                 campo.processar_evento(evento)
+                if campo is self.cad_tipo and campo.texto != texto_anterior:
+                    self.cad_host.prefixo = self.prefixos_hostname[campo.texto]
+                    self._atualizar_rotulo_dado_extra()
+                if campo is self.cad_loc and campo.texto == "__NOVA_SALA__" and campo.texto != texto_anterior:
+                    self.cad_sala_nova.texto = ""
+                    self.cad_sala_nova.ativo = True
+                    self.cad_sala_nova.cor = self.cad_sala_nova.cor_ativa
+                if campo is self.consulta_busca and campo.texto != texto_anterior:
+                    filtrados = self._ativos_filtrados()
+                    self.scroll_resultados_consulta = 0
+                    self.ativo_consulta_selecionado = filtrados[0] if filtrados else None
                 if campo is self.vuln_modelo:
                     if campo.texto != texto_anterior:
                         if campo.texto == "__NVD_MORE__":
@@ -901,6 +1036,12 @@ class App:
                     if campo.filtro != filtro_anterior:
                         self.preencher_vulnerabilidade_predefinida("")
                         self._programar_busca_nvd(campo.filtro)
+                if (
+                    campo in (self.cad_tipo, self.cad_loc)
+                    and evento.type == pygame.MOUSEBUTTONDOWN
+                    and campo.texto != texto_anterior
+                ):
+                    break
 
             if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 self.tratar_clique(pos_mouse)
@@ -999,7 +1140,7 @@ class App:
         pygame.draw.rect(self.tela, COR_CIANO_NEON if self.objeto_em_hover == "TELAO" else (30, 48, 75), self.rect_telao, 2)
         
         fase_telao = (ticks // 10000) % 2 
-        titulo_telao = "DASHBOARD [AUDITORIA]: LOGS EM TEMPO REAL" if fase_telao == 0 else "DASHBOARD [AMEAÇAS]: VULNERABILIDADES ATIVAS"
+        titulo_telao = "DASHBOARD : LOGS EM TEMPO REAL" if fase_telao == 0 else "DASHBOARD [AMEAÇAS]: VULNERABILIDADES ATIVAS"
         cor_titulo_telao = COR_CIANO_NEON if fase_telao == 0 else COR_VERMELHO_NEON
         self.tela.blit(self.fonte_m.render(titulo_telao, True, cor_titulo_telao), (self.rect_telao.x + 16, self.rect_telao.y + 10))
         
@@ -1068,7 +1209,7 @@ class App:
         pos_mouse = pygame.mouse.get_pos()
 
         if self.modal_ativo == "NOTEBOOK_CRUD":
-            self.tela.blit(self.fonte_g.render("GERENCIADOR DE ATIVOS // CRUD VIEW", True, COR_CIANO_NEON), (rect_modal.x + 30, rect_modal.y + 24))
+            self.tela.blit(self.fonte_g.render("GERENCIADOR DE ATIVOS", True, COR_CIANO_NEON), (rect_modal.x + 30, rect_modal.y + 24))
             
             abas = [("LISTAR", 320), ("CADASTRAR", 440), ("ATUALIZAR", 560), ("REMOVER", 680)]
             for nome, x in abas:
@@ -1083,30 +1224,83 @@ class App:
             pygame.draw.rect(self.tela, (30, 45, 68), corpo, 1)
 
             if self.aba_crud_ativa == "LISTAR":
-                self.tela.blit(self.fonte_p.render("DADOS VINCULADOS AO ARQUIVO JSON:", True, COR_TEXTO_MUTED), (corpo.x + 20, corpo.y + 10))
-                if not self.lista_ativos_display:
-                    self.tela.blit(self.fonte_p.render("Nenhum ativo cadastrado. Vá em CADASTRAR.", True, COR_TEXTO), (corpo.x + 20, corpo.y + 40))
+                self.consulta_busca.desenhar(self.tela)
+                painel_resultados = pygame.Rect(290, 220, 340, 230)
+                painel_detalhes = pygame.Rect(640, 220, 350, 230)
+                pygame.draw.rect(self.tela, (8, 12, 18), painel_resultados)
+                pygame.draw.rect(self.tela, (40, 58, 85), painel_resultados, 1)
+                pygame.draw.rect(self.tela, (8, 12, 18), painel_detalhes)
+                pygame.draw.rect(self.tela, COR_CIANO_NEON, painel_detalhes, 1)
+                self.tela.blit(self.fonte_p.render("ATIVOS ENCONTRADOS", True, COR_CIANO_NEON), (painel_resultados.x + 10, painel_resultados.y + 8))
+                self.tela.blit(self.fonte_m.render("DETALHES DO ATIVO", True, COR_CIANO_NEON), (painel_detalhes.x + 12, painel_detalhes.y + 8))
+
+                self.rects_ativos_crud = []
+                ativos_filtrados = self._ativos_filtrados()
+                ativos_visiveis = ativos_filtrados[self.scroll_resultados_consulta:self.scroll_resultados_consulta + 7]
+                if not ativos_filtrados:
+                    self.tela.blit(self.fonte_p.render("Nenhum ativo correspondente.", True, COR_TEXTO_MUTED), (painel_resultados.x + 10, painel_resultados.y + 42))
                 else:
-                    for i, it in enumerate(self.lista_ativos_display[:10]): 
-                        self.tela.blit(self.fonte_p.render(it, True, COR_VERMELHO_NEON if "ALERTA" in it else COR_TEXTO), (corpo.x + 20, corpo.y + 40 + i * 24))
+                    for indice, ativo in enumerate(ativos_visiveis):
+                        rect_ativo = pygame.Rect(painel_resultados.x + 8, painel_resultados.y + 34 + indice * 27, 324, 24)
+                        selecionado = (
+                            self.ativo_consulta_selecionado
+                            and str(self.ativo_consulta_selecionado.get('id')) == str(ativo.get('id'))
+                        )
+                        pygame.draw.rect(self.tela, (30, 55, 72) if selecionado else (18, 24, 32), rect_ativo)
+                        pygame.draw.rect(self.tela, COR_CIANO_NEON if selecionado else (40, 58, 85), rect_ativo, 1)
+                        texto_ativo = f"{ativo.get('nome', '')} | {ativo.get('responsavel', '')}"
+                        while texto_ativo and self.fonte_p.size(texto_ativo)[0] > rect_ativo.width - 12:
+                            texto_ativo = texto_ativo[:-1]
+                        self.tela.blit(self.fonte_p.render(texto_ativo, True, COR_TEXTO), (rect_ativo.x + 6, rect_ativo.y + 4))
+                        self.rects_ativos_crud.append((rect_ativo, ativo))
+
+                if self.ativo_consulta_selecionado:
+                    ativo = self.ativo_consulta_selecionado
+                    tipo = str(ativo.get('tipo', '')).upper()
+                    tipo_exibicao = {
+                        "NOTEBOOK": "Notebook",
+                        "SERVIDOR": "Servidor",
+                        "DESKTOP": "Desktop",
+                        "ROTEADOR": "Roteador"
+                    }.get(tipo, tipo or "Não informado")
+                    detalhes = [
+                        ("Hostname", ativo.get('nome', 'Não informado')),
+                        ("Patrimônio", ativo.get('id', 'Não informado')),
+                        ("Usuário", ativo.get('responsavel', 'Não informado')),
+                        ("Local", ativo.get('local', 'Não informado')),
+                        ("Tipo", tipo_exibicao)
+                    ]
+                    if 'qnt_ram' in ativo:
+                        detalhes.append(("Memória", f"{ativo['qnt_ram']} GB RAM"))
+                    if 'sistema_operacional' in ativo:
+                        detalhes.append(("Sistema", ativo['sistema_operacional']))
+                    if 'firmware_atualizado' in ativo:
+                        firmware = "Atualizado" if ativo['firmware_atualizado'] else "Desatualizado"
+                        detalhes.append(("Firmware", firmware))
+
+                    self.tela.set_clip(pygame.Rect(painel_detalhes.x + 8, painel_detalhes.y + 34, painel_detalhes.width - 16, painel_detalhes.height - 42))
+                    for indice, (rotulo, valor) in enumerate(detalhes):
+                        texto_detalhe = f"{rotulo}: {valor}"
+                        self.tela.blit(self.fonte_p.render(texto_detalhe, True, COR_TEXTO), (painel_detalhes.x + 12, painel_detalhes.y + 38 + indice * 25))
+                    self.tela.set_clip(None)
+                else:
+                    self.tela.blit(self.fonte_p.render("Selecione um ativo para ver os dados.", True, COR_TEXTO_MUTED), (painel_detalhes.x + 12, painel_detalhes.y + 45))
             
             elif self.aba_crud_ativa == "CADASTRAR":
-                for campo in self.campos_cad: 
+                for campo in self._campos_cadastro_ativos():
                     campo.desenhar(self.tela)
+                self.cad_tipo.desenhar_menu(self.tela)
+                if self.cad_loc.texto != "__NOVA_SALA__":
+                    self.cad_loc.desenhar_menu(self.tela)
                     
                 col_x = 630
                 col_y = 190
-                self.tela.blit(self.fonte_m.render("PADRÃO AUTOMÁTICO DE ATIVOS", True, COR_AMBAR), (col_x, col_y))
-                self.tela.blit(self.fonte_p.render("O tipo é deduzido pelo Hostname:", True, COR_CIANO_NEON), (col_x, col_y + 30))
-                self.tela.blit(self.fonte_p.render("• NOTP... = Notebook", True, COR_TEXTO_MUTED), (col_x, col_y + 50))
-                self.tela.blit(self.fonte_p.render("• SERV... = Servidor", True, COR_TEXTO_MUTED), (col_x, col_y + 70))
-                self.tela.blit(self.fonte_p.render("• MICP... = Desktop", True, COR_TEXTO_MUTED), (col_x, col_y + 90))
-                self.tela.blit(self.fonte_p.render("• ROTP... = Roteador", True, COR_TEXTO_MUTED), (col_x, col_y + 110))
-                
-                self.tela.blit(self.fonte_p.render("Regras de Dados Extras:", True, COR_CIANO_NEON), (col_x, col_y + 150))
-                self.tela.blit(self.fonte_p.render("• Desktop/Note: RAM (Ex: 16)", True, COR_TEXTO_MUTED), (col_x, col_y + 170))
-                self.tela.blit(self.fonte_p.render("• Servidor: SO (Ex: Linux)", True, COR_TEXTO_MUTED), (col_x, col_y + 190))
-                self.tela.blit(self.fonte_p.render("• Roteador: FW (S/N)", True, COR_TEXTO_MUTED), (col_x, col_y + 210))
+                self.tela.blit(self.fonte_m.render("IDENTIFICAÇÃO DO ATIVO", True, COR_AMBAR), (col_x, col_y))
+                self.tela.blit(self.fonte_p.render("Selecione o tipo; prefixo automático.", True, COR_CIANO_NEON), (col_x, col_y + 32))
+                self.tela.blit(self.fonte_p.render("Use 4+ dígitos para o patrimônio.", True, COR_TEXTO_MUTED), (col_x, col_y + 54))
+                self.tela.blit(self.fonte_p.render("RAM: número em GB | Servidor: SO", True, COR_TEXTO_MUTED), (col_x, col_y + 92))
+                self.tela.blit(self.fonte_p.render("Roteador: firmware S/N", True, COR_TEXTO_MUTED), (col_x, col_y + 114))
+                self.tela.blit(self.fonte_p.render("Local: Sala A-D ou + Nova sala", True, COR_TEXTO_MUTED), (col_x, col_y + 150))
                 
             elif self.aba_crud_ativa in ["ATUALIZAR", "REMOVER"]:
                 if self.aba_crud_ativa == "ATUALIZAR":
@@ -1133,10 +1327,11 @@ class App:
             if self.mensagem_status:
                 self.tela.blit(self.fonte_m.render(self.mensagem_status, True, self.cor_status), (320, 490))
 
-            btn_exec = pygame.Rect(320, 520, 340, 44)
-            pygame.draw.rect(self.tela, (20, 45, 60), btn_exec)
-            pygame.draw.rect(self.tela, COR_CIANO_NEON, btn_exec, 1)
-            self.tela.blit(self.fonte_m.render(f"DISPARAR: {self.aba_crud_ativa}", True, COR_CIANO_NEON), (btn_exec.x + 20, btn_exec.y + 12))
+            if self.aba_crud_ativa != "LISTAR":
+                btn_exec = pygame.Rect(320, 520, 340, 44)
+                pygame.draw.rect(self.tela, (20, 45, 60), btn_exec)
+                pygame.draw.rect(self.tela, COR_CIANO_NEON, btn_exec, 1)
+                self.tela.blit(self.fonte_m.render(f"DISPARAR: {self.aba_crud_ativa}", True, COR_CIANO_NEON), (btn_exec.x + 20, btn_exec.y + 12))
 
         elif self.modal_ativo == "DASHBOARD_TELAO":
             self.tela.blit(self.fonte_g.render("DASHBOARD PRINCIPAL // AUDITORIA E LOGS", True, COR_CIANO_NEON), (rect_modal.x + 30, rect_modal.y + 24))
@@ -1195,7 +1390,18 @@ class App:
                 self.tela.blit(self.fonte_p.render("visualizar os dados.", True, (60, 80, 100)), (area_detalhe.x + 10, area_detalhe.y + 140))
 
         elif self.modal_ativo == "SERVIDOR_INFRA":
-            self.tela.blit(self.fonte_g.render("INFRAESTRUTURA: TOPOLOGIA DE RISCO (GAVETAS)", True, COR_AMBAR), (rect_modal.x + 30, rect_modal.y + 24))
+            linha_global = next(
+                (linha for linha in self.relatorio_risco if linha.startswith("RISCO GLOBAL EFETIVO TOTAL:")),
+                "RISCO GLOBAL EFETIVO TOTAL: N/A"
+            )
+            risco_global_total = linha_global.split(":", 1)[1].strip()
+            servidor_focado = next(
+                (servidor for servidor in self.ativos_brutos if str(servidor.get('id', '')) == str(self.servidor_foco_painel)),
+                None
+            )
+            sala_focada = str(servidor_focado.get('local', '')).strip() if servidor_focado else ""
+            titulo_risco = f"RISCO DA SALA {sala_focada or '—'} | GLOBAL: {risco_global_total}"
+            self.tela.blit(self.fonte_g.render(titulo_risco, True, COR_AMBAR), (rect_modal.x + 30, rect_modal.y + 24))
             
             # 1. DIVIDIR A TELA EM DOIS PAINÉIS
             area_gavetas = pygame.Rect(rect_modal.x + 20, rect_modal.y + 70, 200, 460)
@@ -1341,8 +1547,13 @@ class App:
                     
                     cx_srv = area_arvore.x + (area_arvore.width // 2)
                     
-                    roteadores = [a for a in self.ativos_brutos if a.get('tipo', '').upper() == 'ROTEADOR']
-                    endpoints = [a for a in self.ativos_brutos if a.get('tipo', '').upper() in ['NOTEBOOK', 'DESKTOP']]
+                    sala_focada_normalizada = str(srv_alvo.get('local', '')).strip().casefold()
+                    ativos_da_sala = [
+                        ativo for ativo in self.ativos_brutos
+                        if str(ativo.get('local', '')).strip().casefold() == sala_focada_normalizada
+                    ]
+                    roteadores = [a for a in ativos_da_sala if a.get('tipo', '').upper() == 'ROTEADOR']
+                    endpoints = [a for a in ativos_da_sala if a.get('tipo', '').upper() in ['NOTEBOOK', 'DESKTOP']]
                     
                     pos_roteadores = []
                     

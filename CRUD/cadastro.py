@@ -36,13 +36,30 @@ def amarrar_dependencia_automatica(novo_ativo_obj, db_inventario, tipo_ativo):
 
 def cadastrar_ativo(id_str, ativo_host, ativo_res, ativo_loc, tipo_str, dado_extra):
     db_inventario = ler_db()
-    
+
+    id_str = str(id_str).strip()
     if not id_str.isdigit():
         print("\nErro: O ID deve ser um número inteiro. Tente novamente.")
         return False
-        
-    if id_str in db_inventario:
+    if len(id_str) < 4:
+        print("\nErro: O patrimônio deve conter pelo menos 4 dígitos.")
+        return False
+
+    id_chave = str(int(id_str))
+    if id_chave in db_inventario:
         print("\nErro: Este ID já existe na db. Tente outro.")
+        return False
+
+    tipo_str = str(tipo_str).strip().upper()
+    prefixos = {
+        "NOTEBOOK": "notp",
+        "SERVIDOR": "serv",
+        "DESKTOP": "micp",
+        "ROTEADOR": "rotp"
+    }
+    prefixo_esperado = prefixos.get(tipo_str)
+    if not prefixo_esperado:
+        print("\nErro: Tipo de ativo inválido.")
         return False
         
     ativo_host = ativo_host.strip().lower()
@@ -55,9 +72,9 @@ def cadastrar_ativo(id_str, ativo_host, ativo_res, ativo_loc, tipo_str, dado_ext
             print("\nErro: Valor duplicado. Tente novamente.")
             return False
             
-    pre_validos = ("notp", "serv", "micp", "rotp")
-    if not ativo_host.startswith(pre_validos):
-        print("\nErro: Hostname fora do padrão. Inicie com NOTP, SERV, MICP ou ROTP")
+    sufixo_hostname = ativo_host[len(prefixo_esperado):]
+    if not ativo_host.startswith(prefixo_esperado) or sufixo_hostname != id_str:
+        print(f"\nErro: O hostname deve ser {prefixo_esperado} seguido pelo patrimônio informado.")
         return False
 
     ativo_res = ativo_res.strip().title()
@@ -72,14 +89,11 @@ def cadastrar_ativo(id_str, ativo_host, ativo_res, ativo_loc, tipo_str, dado_ext
     if ativo_loc == "":
         print("\nErro: Localidade não pode estar vazia")
         return False
-    elif not ativo_loc.replace(" ", "").isalpha():
-        print("\nErro: A localização não pode ficar vazia ou ter números e símbolos")
+    elif not ativo_loc.replace(" ", "").replace("-", "").isalnum():
+        print("\nErro: A localização aceita letras, números, espaços e hífens.")
         return False
 
-    novo_ativo = None
     id_num = int(id_str)
-    tipo_str = tipo_str.strip().upper()
-
     dados_brutos = {
         'id': id_num,
         'nome': ativo_host,
@@ -87,6 +101,27 @@ def cadastrar_ativo(id_str, ativo_host, ativo_res, ativo_loc, tipo_str, dado_ext
         'local': ativo_loc,
         'dado_extra': dado_extra
     }
+
+    dado_extra = str(dado_extra).strip()
+    if tipo_str in ("NOTEBOOK", "DESKTOP"):
+        if not dado_extra.isdigit() or int(dado_extra) < 1:
+            print("\nErro: Informe a memória RAM em GB como um número inteiro positivo.")
+            return False
+        dados_brutos['qnt_ram'] = int(dado_extra)
+    elif tipo_str == "SERVIDOR":
+        if not dado_extra:
+            print("\nErro: Informe o sistema operacional do servidor.")
+            return False
+        dados_brutos['sistema_operacional'] = dado_extra
+    elif tipo_str == "ROTEADOR":
+        firmware = dado_extra.casefold()
+        if firmware in ("s", "sim", "atualizado", "yes", "y"):
+            dados_brutos['firmware_atualizado'] = True
+        elif firmware in ("n", "não", "nao", "desatualizado", "no"):
+            dados_brutos['firmware_atualizado'] = False
+        else:
+            print("\nErro: Informe S ou N para o estado do firmware.")
+            return False
 
     novo_ativo = Equipamento.fabricar_ativo(tipo_str, dados_brutos)
 
@@ -98,7 +133,7 @@ def cadastrar_ativo(id_str, ativo_host, ativo_res, ativo_loc, tipo_str, dado_ext
 
     amarrar_dependencia_automatica(novo_ativo, db_inventario, tipo_str)
 
-    db_inventario[id_str] = novo_ativo.__dict__
+    db_inventario[id_chave] = novo_ativo.__dict__
     salvar_db(db_inventario)
 
     print(f"\nSucesso: Ativo '{novo_ativo.nome}' registrado e guardado na db!")
