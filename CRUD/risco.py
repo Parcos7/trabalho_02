@@ -13,19 +13,12 @@ def calcular_risco_global():
     vulns_ativas = []
     for indice_eq, eq in enumerate(equipamentos):
         for vulnerabilidade in eq.get('vulnerabilidades', []):
-            if vulnerabilidade.get('status', '').strip().lower() != 'corrigida':
+            if Equipamento.vulnerabilidade_esta_aberta(vulnerabilidade):
                 vulns_ativas.append((indice_eq, vulnerabilidade))
 
     m = len(vulns_ativas)
-    if m == 0:
-        return [
-            "================= RELATÓRIO DE RISCO GLOBAL =================",
-            "SISTEMA 100% SEGURO",
-            "Nenhuma vulnerabilidade ativa detectada.",
-            "Matriz M: 0x0"
-        ]
 
-    pesos = {'baixa': 1.0, 'media': 2.5, 'alta': 5.0, 'critica': 10.0}
+    pesos = Equipamento.PESOS_SEVERIDADE
 
     M = np.zeros((n, m))
     v = np.zeros(m)
@@ -35,13 +28,17 @@ def calcular_risco_global():
         severidade = vulnerabilidade.get('severidade', 'baixa').strip().lower()
         v[indice_vuln] = pesos.get(severidade, 1.0)
 
-    b = np.dot(M, v)
+    riscos_base = np.dot(M, v)
+    b = np.zeros(n)
 
     for i, eq in enumerate(equipamentos):
         tipo = str(eq.get('tipo', '')).upper()
         ativo_obj = Equipamento.fabricar_ativo(tipo, eq)
-        fator_exposicao = ativo_obj.fator_exposicao() if ativo_obj else 1.0
-        b[i] *= fator_exposicao
+        if ativo_obj:
+            ativo_obj.vulnerabilidades = eq.get('vulnerabilidades', [])
+            b[i] = ativo_obj.calcular_risco(riscos_base[i])
+        else:
+            b[i] = riscos_base[i]
 
     A = np.zeros((n, n))
     indices_por_id = {str(eq.get('id', '')): indice for indice, eq in enumerate(equipamentos)}

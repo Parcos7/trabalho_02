@@ -25,7 +25,7 @@ def remover_ativo(id_busca):
             print("=" * 45)
         
         # --- CORREÇÃO CRÍTICA ---
-        for key, asset_data in db_inventario.items():
+        for asset_data in db_inventario.values():
             if 'dependencias' in asset_data:
                 asset_data['dependencias'] = [
                     dependencia for dependencia in asset_data['dependencias']

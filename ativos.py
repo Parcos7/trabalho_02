@@ -11,6 +11,11 @@
 from abc import ABC, abstractmethod
 
 class Equipamento(ABC):
+    PESOS_SEVERIDADE = {'baixa': 1.0, 'media': 2.5, 'alta': 5.0, 'critica': 10.0}
+    STATUS_ABERTO = 'aberto'
+    STATUS_FECHADO = 'fechado'
+    STATUS_FECHADOS = frozenset({'fechado', 'fechada', 'corrigida', 'closed', 'resolved'})
+
     def __init__(self, id_ativo: int, nome: str, responsavel: str, local: str):
         self.id = id_ativo
         self.nome = nome
@@ -22,6 +27,17 @@ class Equipamento(ABC):
     def adicionar_vulnerabilidade(self, vulnerabilidade: dict):
         self.vulnerabilidades.append(vulnerabilidade)
 
+    @classmethod
+    def normalizar_status_vulnerabilidade(cls, status):
+        status_normalizado = str(status).strip().lower()
+        if status_normalizado in cls.STATUS_FECHADOS:
+            return cls.STATUS_FECHADO
+        return cls.STATUS_ABERTO
+
+    @classmethod
+    def vulnerabilidade_esta_aberta(cls, vulnerabilidade):
+        return cls.normalizar_status_vulnerabilidade(vulnerabilidade.get('status', '')) == cls.STATUS_ABERTO
+
     def exibir_informacoes(self):
         print(f"\n[ID: {self.id}] - {self.nome}\n"\
               f"Responsável: {self.responsavel} | Local: {self.local}\n" \
@@ -30,6 +46,19 @@ class Equipamento(ABC):
     @abstractmethod
     def fator_exposicao(self):
         return 0.8
+
+    def calcular_risco(self, risco_base=None):
+        if risco_base is None:
+            risco_base = sum(
+                self.PESOS_SEVERIDADE.get(
+                    str(vulnerabilidade.get('severidade', 'baixa')).strip().lower(),
+                    1.0
+                )
+                for vulnerabilidade in self.vulnerabilidades
+                if self.vulnerabilidade_esta_aberta(vulnerabilidade)
+            )
+
+        return risco_base * self.fator_exposicao()
 
     @staticmethod
     def fabricar_ativo(tipo_ativo, dados_ativos):

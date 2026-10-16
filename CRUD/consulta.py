@@ -16,7 +16,7 @@ def consultar_todosA():
         print("Nenhum ativo cadastrado no sistema no momento.")
         return False
 
-    for chave, dados in db_inventario.items():
+    for dados in db_inventario.values():
         tipo = dados.get('tipo')
         ativo_obj = Equipamento.fabricar_ativo(tipo, dados)
 
@@ -31,7 +31,8 @@ def consultar_todosA():
                 print(" -> Este equipamento está limpo. Nenhuma vulnerabilidade registrada.")
             else:
                 for vul in ativo_obj.vulnerabilidades:
-                    print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {vul['status']}")
+                    status = Equipamento.normalizar_status_vulnerabilidade(vul.get('status', ''))
+                    print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {status}")
             
             print("=" * 45)
     
@@ -49,7 +50,7 @@ def consultar_ativo(termo_busca):
     print(f"\n--- CONSULTA DE ATIVO DE TI: {termo_busca.upper()} ---")
     encontrado = False
 
-    for chave, dados in db_inventario.items():
+    for dados in db_inventario.values():
         if str(dados['id']) == termo_busca or dados['nome'].lower() == termo_busca:
             print("\n[ ATIVO ENCONTRADO ]")
             
@@ -67,7 +68,8 @@ def consultar_ativo(termo_busca):
                     print(" -> Este equipamento está limpo. Nenhuma vulnerabilidade registrada.")
                 else:
                     for vul in ativo_obj.vulnerabilidades:
-                        print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {vul['status']}")
+                        status = Equipamento.normalizar_status_vulnerabilidade(vul.get('status', ''))
+                        print(f" -> [{vul['severidade'].upper()}] {vul['descricao']} | Status: {status}")
             
             encontrado = True
             break 

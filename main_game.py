@@ -2,13 +2,16 @@ import sys
 import math
 import random
 import datetime
+import time
 import pygame
+from ativos import Equipamento
 from persistencia import ler_db
 from CRUD.cadastro import cadastrar_ativo
 from CRUD.atualizar import atualizar_ativo
 from CRUD.remover import remover_ativo
-from vulnerabilidades import registrar_vulnerabilidade, corrigir_vulnerabilidade
+from vulnerabilidades import CATALOGO_VULNERABILIDADES, registrar_vulnerabilidade, corrigir_vulnerabilidade
 from CRUD.risco import calcular_risco_global
+from integracoes.nvd_api import NvdCveSearchWorker
 
 # ==========================================
 # SESSÃO: CONFIGURAÇÕES GERAIS E CONSTANTES
@@ -42,19 +45,20 @@ COR_PAINEL_BORDA = (0, 255, 0)
 # SESSÃO: COMPONENTES DE INTERFACE (UI)
 # ==========================================
 class CaixaTexto:
-    def __init__(self, x, y, largura, altura, rotulo):
+    def __init__(self, x, y, largura, altura, rotulo, somente_leitura=False):
         self.rect = pygame.Rect(x, y, largura, altura)
         self.cor_ativa = COR_CIANO_NEON
         self.cor_inativa = (40, 58, 85)
         self.cor = self.cor_inativa
         self.texto = ''
         self.rotulo = rotulo
+        self.somente_leitura = somente_leitura
         self.ativo = False
         self.fonte = pygame.font.SysFont("Consolas", 14)
 
     def processar_evento(self, evento):
         if evento.type == pygame.MOUSEBUTTONDOWN:
-            if self.rect.collidepoint(evento.pos):
+            if self.rect.collidepoint(evento.pos) and not self.somente_leitura:
                 self.ativo = True
             else:
                 self.ativo = False
@@ -73,13 +77,194 @@ class CaixaTexto:
     def desenhar(self, tela):
         pygame.draw.rect(tela, (15, 20, 30), self.rect)
         pygame.draw.rect(tela, self.cor, self.rect, 2)
-        
-        if self.texto:
-            img_txt = self.fonte.render(self.texto, True, COR_TEXTO)
+
+        texto = self.texto if self.texto else self.rotulo
+        if self.somente_leitura and self.texto:
+            texto = f"{self.rotulo}: {self.texto}"
+        cor_texto = COR_TEXTO if self.texto else COR_TEXTO_MUTED
+        largura_util = self.rect.width - 16
+        linhas = [""]
+        for caractere in texto:
+            if caractere == "\n":
+                linhas.append("")
+                continue
+            if self.fonte.size(linhas[-1] + caractere)[0] > largura_util:
+                linhas.append(caractere)
+            else:
+                linhas[-1] += caractere
+
+        total_linhas = max(1, (self.rect.height - 8) // self.fonte.get_linesize())
+        for indice, linha in enumerate(linhas[:total_linhas]):
+            img_txt = self.fonte.render(linha, True, cor_texto)
+            tela.blit(img_txt, (self.rect.x + 8, self.rect.y + 8 + indice * self.fonte.get_linesize()))
+
+class CaixaSelecao:
+    def __init__(self, x, y, largura, altura, rotulo, opcoes, valor_inicial, bloqueado=False, mostrar_rotulo=True, permitir_busca=False):
+        self.rect = pygame.Rect(x, y, largura, altura)
+        self.rotulo = rotulo
+        self.opcoes_base = list(opcoes)
+        self.opcoes = list(opcoes)
+        self.texto = valor_inicial
+        self.ativo = False
+        self.bloqueado = bloqueado
+        self.mostrar_rotulo = mostrar_rotulo
+        self.permitir_busca = permitir_busca
+        self.filtro = ""
+        self.menu_aberto = False
+        self.max_opcoes_visiveis = 7
+        self.indice_menu_inicio = 0
+        self.indice_destacado = next(
+            (indice for indice, (_, valor) in enumerate(opcoes) if valor == valor_inicial),
+            0
+        )
+        self.cor_ativa = COR_CIANO_NEON
+        self.cor_inativa = (40, 58, 85)
+        self.cor = self.cor_inativa
+        self.altura_opcao = 26
+        self.fonte = pygame.font.SysFont("Consolas", 14)
+
+    def definir_valor(self, valor):
+        valor_normalizado = str(valor).strip().lower()
+        for _, valor_opcao in self.opcoes_base:
+            if str(valor_opcao).strip().lower() == valor_normalizado:
+                self.texto = valor_opcao
+                self.indice_destacado = next(
+                    indice for indice, (_, valor) in enumerate(self.opcoes_base)
+                    if str(valor).strip().lower() == valor_normalizado
+                )
+                return
+
+    def definir_opcoes(self, opcoes):
+        self.opcoes_base = list(opcoes)
+        self.definir_filtro(self.filtro)
+
+    def definir_filtro(self, termo):
+        self.filtro = str(termo).lstrip()
+        if not self.filtro:
+            self.opcoes = list(self.opcoes_base)
         else:
-            img_txt = self.fonte.render(self.rotulo, True, COR_TEXTO_MUTED)
-            
-        tela.blit(img_txt, (self.rect.x + 8, self.rect.y + 8))
+            termo_normalizado = self.filtro.casefold()
+            self.opcoes = [
+                (nome, valor) for nome, valor in self.opcoes_base
+                if valor and (
+                    termo_normalizado in nome.casefold()
+                    or termo_normalizado in str(valor).casefold()
+                )
+            ]
+            if not self.opcoes:
+                texto_vazio = "Buscando na NVD..." if len(self.filtro) >= 3 else "Digite 3+ caracteres"
+                self.opcoes = [(texto_vazio, "")]
+        self.indice_menu_inicio = 0
+        self.indice_destacado = min(self.indice_destacado, len(self.opcoes) - 1)
+
+    def limpar_busca(self):
+        self.filtro = ""
+        self.definir_filtro("")
+
+    def _rect_opcao(self, indice):
+        return pygame.Rect(
+            self.rect.x,
+            self.rect.bottom + indice * self.altura_opcao,
+            self.rect.width,
+            self.altura_opcao
+        )
+
+    def processar_evento(self, evento):
+        if self.bloqueado:
+            return False
+
+        filtro_anterior = self.filtro
+
+        if evento.type == pygame.MOUSEBUTTONDOWN:
+            if self.menu_aberto:
+                opcoes_visiveis = self.opcoes[
+                    self.indice_menu_inicio:self.indice_menu_inicio + self.max_opcoes_visiveis
+                ]
+                for indice_visivel, (_, valor) in enumerate(opcoes_visiveis):
+                    if self._rect_opcao(indice_visivel).collidepoint(evento.pos) and valor:
+                        indice = self.indice_menu_inicio + indice_visivel
+                        self.definir_valor(valor)
+                        self.menu_aberto = False
+                        self.ativo = True
+                        self.cor = self.cor_ativa
+                        return False
+
+            self.ativo = self.rect.collidepoint(evento.pos)
+            self.cor = self.cor_ativa if self.ativo else self.cor_inativa
+            if self.ativo:
+                self.menu_aberto = not self.menu_aberto
+                if self.menu_aberto and self.permitir_busca:
+                    self.texto = ""
+                    self.limpar_busca()
+            else:
+                self.menu_aberto = False
+
+        if evento.type == pygame.KEYDOWN and self.ativo:
+            if self.permitir_busca and self.menu_aberto:
+                if evento.key == pygame.K_BACKSPACE:
+                    self.texto = ""
+                    self.definir_filtro(self.filtro[:-1])
+                    return self.filtro != filtro_anterior
+                if evento.unicode and evento.unicode.isprintable():
+                    self.texto = ""
+                    self.definir_filtro(self.filtro + evento.unicode)
+                    return self.filtro != filtro_anterior
+
+            valores = [valor for _, valor in self.opcoes]
+            if not valores:
+                return False
+            indice_atual = valores.index(self.texto) if self.texto in valores else 0
+            if evento.key in (pygame.K_DOWN, pygame.K_UP):
+                self.menu_aberto = True
+                deslocamento = 1 if evento.key == pygame.K_DOWN else -1
+                self.indice_destacado = (indice_atual + deslocamento) % len(valores)
+            elif evento.key == pygame.K_RETURN and self.menu_aberto:
+                valor = valores[self.indice_destacado]
+                if valor:
+                    self.definir_valor(valor)
+                self.menu_aberto = False
+            elif evento.key == pygame.K_ESCAPE:
+                self.menu_aberto = False
+
+        if evento.type == pygame.MOUSEWHEEL and self.menu_aberto:
+            max_inicio = max(0, len(self.opcoes) - self.max_opcoes_visiveis)
+            self.indice_menu_inicio = max(0, min(max_inicio, self.indice_menu_inicio - evento.y))
+        return self.filtro != filtro_anterior
+
+    def desenhar(self, tela):
+        pygame.draw.rect(tela, (15, 20, 30), self.rect)
+        pygame.draw.rect(tela, self.cor, self.rect, 2)
+
+        nome = next((nome for nome, valor in self.opcoes_base if valor == self.texto), "")
+        rotulo = f"{self.rotulo}: " if self.mostrar_rotulo else ""
+        if self.permitir_busca and self.menu_aberto and self.filtro:
+            nome = f"Busca: {self.filtro}"
+        texto = self.fonte.render(f"{rotulo}{nome}", True, COR_TEXTO)
+        tela.blit(texto, (self.rect.x + 8, self.rect.y + 7))
+        if not self.bloqueado:
+            seta = self.fonte.render("v", True, self.cor)
+            tela.blit(seta, (self.rect.right - seta.get_width() - 8, self.rect.y + 7))
+
+    def desenhar_menu(self, tela):
+        if not self.menu_aberto:
+            return
+
+        opcoes_visiveis = self.opcoes[
+            self.indice_menu_inicio:self.indice_menu_inicio + self.max_opcoes_visiveis
+        ]
+        for indice, (nome, _) in enumerate(opcoes_visiveis):
+            rect_opcao = self._rect_opcao(indice)
+            indice_global = self.indice_menu_inicio + indice
+            cor_borda = self.cor_ativa if indice_global == self.indice_destacado else self.cor_inativa
+            pygame.draw.rect(tela, (15, 20, 30), rect_opcao)
+            pygame.draw.rect(tela, cor_borda, rect_opcao, 1)
+            nome_visivel = nome
+            while nome_visivel and self.fonte.size(nome_visivel)[0] > self.rect.width - 16:
+                nome_visivel = nome_visivel[:-1]
+            if nome_visivel != nome:
+                nome_visivel = nome_visivel.rstrip() + "..."
+            texto = self.fonte.render(nome_visivel, True, COR_TEXTO)
+            tela.blit(texto, (rect_opcao.x + 8, rect_opcao.y + 5))
 
 # ==========================================
 # SESSÃO: CLASSE PRINCIPAL DO SISTEMA (APP)
@@ -161,14 +346,26 @@ class App:
         self.rem_id = CaixaTexto(300, 250, 300, 32, "ID ou Hostname do Ativo")
         self.campos_rem = [self.rem_id]
 
-        self.vuln_id = CaixaTexto(280, 160, 300, 28, "ID ou Hostname do Alvo")
-        self.vuln_cve = CaixaTexto(280, 200, 300, 28, "Código CVE (Opcional)")
-        self.vuln_desc = CaixaTexto(280, 240, 300, 28, "Descrição (Ex: Senha fraca)")
-        self.vuln_cat = CaixaTexto(280, 280, 300, 28, "Categoria (Rede, Hardware)")
-        self.vuln_sev = CaixaTexto(280, 320, 300, 28, "Severidade (baixa/media/alta/critica)")
-        self.vuln_stat = CaixaTexto(280, 360, 300, 28, "Status (aberta/corrigida...)")
-        self.vuln_log = CaixaTexto(280, 400, 300, 28, "Log da Correção (Obrigatório p/ Corrigir)")
-        self.campos_vuln = [self.vuln_id, self.vuln_cve, self.vuln_desc, self.vuln_cat, self.vuln_sev, self.vuln_stat, self.vuln_log]
+        opcoes_vulnerabilidade = [("Selecione uma vulnerabilidade", "")]
+        opcoes_vulnerabilidade.extend((item['nome'], item['id']) for item in CATALOGO_VULNERABILIDADES)
+        self.vuln_id = CaixaTexto(280, 160, 300, 28, "ID ou Hostname do Alvo", somente_leitura=True)
+        self.vuln_modelo = CaixaSelecao(280, 200, 300, 28, "Vulnerabilidade", opcoes_vulnerabilidade, "", mostrar_rotulo=False, permitir_busca=True)
+        self.vuln_cve = CaixaTexto(280, 240, 300, 28, "CVE", somente_leitura=True)
+        self.vuln_desc = CaixaTexto(280, 280, 300, 28, "Descrição", somente_leitura=True)
+        self.vuln_cat = CaixaTexto(280, 320, 300, 28, "Categoria", somente_leitura=True)
+        opcoes_severidade = [("Aguardando padrão", "")] + [(nome, valor) for nome, valor in [("Baixa", "baixa"), ("Média", "media"), ("Alta", "alta"), ("Crítica", "critica")]]
+        self.vuln_sev = CaixaSelecao(280, 360, 300, 28, "Severidade", opcoes_severidade, "", bloqueado=True)
+        self.vuln_stat = CaixaSelecao(280, 400, 300, 28, "Status", [("Aberto", Equipamento.STATUS_ABERTO), ("Fechado", Equipamento.STATUS_FECHADO)], Equipamento.STATUS_ABERTO, bloqueado=True)
+        self.vuln_log = CaixaTexto(280, 440, 300, 56, "Log da Correção (Obrigatório p/ Corrigir)")
+        self.campos_vuln = [self.vuln_id, self.vuln_modelo, self.vuln_cve, self.vuln_desc, self.vuln_cat, self.vuln_sev, self.vuln_stat, self.vuln_log]
+        self.vulnerabilidades_disponiveis = {item['id']: item for item in CATALOGO_VULNERABILIDADES}
+        self.resultados_nvd = []
+        self.total_resultados_nvd = 0
+        self.proximo_indice_nvd = 0
+        self.busca_nvd_pendente = ""
+        self.busca_nvd_inicio_pendente = 0
+        self.busca_nvd_disparar_em = 0.0
+        self.worker_nvd = NvdCveSearchWorker()
 
         self.adicionar_log("SISTEMA", "SOC", "Interface de Segurança Nível 3 Inicializada.")
         self.sincronizar_dados()
@@ -189,6 +386,115 @@ class App:
         self.mensagem_status = texto
         self.cor_status = cor
 
+    def preencher_vulnerabilidade_predefinida(self, identificador):
+        vulnerabilidade = self.vulnerabilidades_disponiveis.get(identificador)
+        if vulnerabilidade is None:
+            self.vuln_cve.texto = ""
+            self.vuln_desc.texto = ""
+            self.vuln_cat.texto = ""
+            self.vuln_sev.definir_valor("")
+            self.vuln_stat.definir_valor(Equipamento.STATUS_ABERTO)
+            return
+
+        self.vuln_cve.texto = vulnerabilidade['cve']
+        self.vuln_desc.texto = vulnerabilidade['descricao']
+        self.vuln_cat.texto = vulnerabilidade['categoria']
+        ativo_alvo = next(
+            (ativo for ativo in self.ativos_brutos if str(ativo.get('id', '')) == self.vuln_id.texto),
+            None
+        )
+        severidade = vulnerabilidade['severidade']
+        if ativo_alvo and str(ativo_alvo.get('tipo', '')).upper() == "SERVIDOR":
+            severidade = "critica"
+        self.vuln_sev.definir_valor(severidade)
+        self.vuln_stat.definir_valor(Equipamento.STATUS_ABERTO)
+
+    def _atualizar_opcoes_catalogo(self):
+        opcoes = [("Selecione uma vulnerabilidade", "")]
+        opcoes.extend((item['nome'], item['id']) for item in CATALOGO_VULNERABILIDADES)
+        cves_locais = {item['cve'].upper() for item in CATALOGO_VULNERABILIDADES if item['cve'] != 'N/A'}
+        opcoes.extend(
+            (item['nome'], item['id'])
+            for item in self.resultados_nvd
+            if item['cve'].upper() not in cves_locais
+        )
+        if len(self.resultados_nvd) < self.total_resultados_nvd:
+            opcoes.append((f"Mais resultados NVD: {self.vuln_modelo.filtro}", "__NVD_MORE__"))
+        self.vuln_modelo.definir_opcoes(opcoes)
+
+    def _programar_busca_nvd(self, termo):
+        termo = str(termo).strip()
+        self.resultados_nvd = []
+        self.total_resultados_nvd = 0
+        self.proximo_indice_nvd = 0
+        self.vulnerabilidades_disponiveis = {item['id']: item for item in CATALOGO_VULNERABILIDADES}
+        self._atualizar_opcoes_catalogo()
+
+        if len(termo) < 3:
+            self.busca_nvd_pendente = ""
+            self.definir_mensagem("Digite 3+ caracteres para buscar na NVD.", COR_AMBAR)
+            return
+
+        self.busca_nvd_pendente = termo
+        self.busca_nvd_inicio_pendente = 0
+        self.busca_nvd_disparar_em = time.monotonic() + 0.6
+        self.definir_mensagem("Buscando na NVD...", COR_CIANO_NEON)
+
+    def _programar_proxima_pagina_nvd(self):
+        self.busca_nvd_pendente = self.vuln_modelo.filtro.strip()
+        self.busca_nvd_inicio_pendente = self.proximo_indice_nvd
+        self.busca_nvd_disparar_em = time.monotonic()
+        self.vuln_modelo.menu_aberto = True
+        self.definir_mensagem("Carregando mais CVEs da NVD...", COR_CIANO_NEON)
+
+    def _processar_busca_nvd(self):
+        resultado = self.worker_nvd.receber()
+        if resultado:
+            termo, pagina, erro = resultado
+            busca_atual = self.vuln_modelo.filtro.strip()
+            if termo.casefold() == busca_atual.casefold() and self.vuln_modelo.menu_aberto:
+                if erro:
+                    self.definir_mensagem("NVD indisponível; busca local mantida.", COR_AMBAR)
+                else:
+                    vulnerabilidades = pagina['vulnerabilidades']
+                    inicio = pagina['inicio']
+                    if inicio == 0:
+                        self.resultados_nvd = []
+                    ids_existentes = {item['id'] for item in self.resultados_nvd}
+                    self.resultados_nvd.extend(
+                        item for item in vulnerabilidades
+                        if item['id'] not in ids_existentes
+                    )
+                    self.total_resultados_nvd = pagina['total']
+                    self.proximo_indice_nvd = inicio + len(vulnerabilidades)
+                    self.vulnerabilidades_disponiveis = {
+                        item['id']: item
+                        for item in (*CATALOGO_VULNERABILIDADES, *self.resultados_nvd)
+                    }
+                    self._atualizar_opcoes_catalogo()
+                    mensagem = f"NVD: {len(self.resultados_nvd)} de {self.total_resultados_nvd}."
+                    self.definir_mensagem(mensagem, COR_CIANO_NEON)
+
+        if (
+            self.busca_nvd_pendente
+            and time.monotonic() >= self.busca_nvd_disparar_em
+        ):
+            self.worker_nvd.solicitar(self.busca_nvd_pendente, self.busca_nvd_inicio_pendente)
+            self.busca_nvd_pendente = ""
+
+    def _limpar_busca_nvd(self):
+        self.busca_nvd_pendente = ""
+        self.resultados_nvd = []
+        self.total_resultados_nvd = 0
+        self.proximo_indice_nvd = 0
+        self.busca_nvd_inicio_pendente = 0
+        self.vulnerabilidades_disponiveis = {item['id']: item for item in CATALOGO_VULNERABILIDADES}
+        opcoes = [("Selecione uma vulnerabilidade", "")]
+        opcoes.extend((item['nome'], item['id']) for item in CATALOGO_VULNERABILIDADES)
+        self.vuln_modelo.definir_opcoes(opcoes)
+        self.vuln_modelo.limpar_busca()
+        self.vuln_modelo.definir_valor("")
+
     def sincronizar_dados(self):
         db_inventario = ler_db()
         self.lista_ativos_display = []
@@ -200,11 +506,11 @@ class App:
         pesos_severidade = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
         max_peso = 0
         
-        for id_ativo, dados in db_inventario.items():
+        for dados in db_inventario.values():
             self.ativos_brutos.append(dados)
             vulns = dados.get('vulnerabilidades', [])
             
-            vulns_em_aberto = [v for v in vulns if v.get('status', '').lower() != 'corrigida']
+            vulns_em_aberto = [v for v in vulns if Equipamento.vulnerabilidade_esta_aberta(v)]
             status_txt = "ONLINE/SEGURO"
             
             if vulns_em_aberto:
@@ -402,8 +708,8 @@ class App:
                 for r_item, d in self.rects_ativos_vuln:
                     if r_item.collidepoint(pos_mouse):
                         self.vuln_id.texto = str(d['id'])
-                        self.vuln_cve.texto = ""
-                        self.vuln_desc.texto = ""
+                        self._limpar_busca_nvd()
+                        self.preencher_vulnerabilidade_predefinida("")
                         self.vuln_log.texto = ""
                         self.definir_mensagem(f"ALVO: {d['nome']}. Preencha os dados e registre a falha.", COR_AMBAR)
                         return
@@ -412,11 +718,20 @@ class App:
                 for r_item, v in self.rects_vulns:
                     if r_item.collidepoint(pos_mouse):
                         self.vuln_id.texto = str(v['id_ativo'])
+                        vulnerabilidade_predefinida = next(
+                            (
+                                item for item in CATALOGO_VULNERABILIDADES
+                                if item['cve'].upper() == str(v['cve']).upper()
+                                and item['descricao'].casefold() == str(v['descricao']).casefold()
+                            ),
+                            None
+                        )
+                        self.vuln_modelo.definir_valor(vulnerabilidade_predefinida['id'] if vulnerabilidade_predefinida else "")
                         self.vuln_cve.texto = v['cve']
                         self.vuln_desc.texto = v['descricao']
                         self.vuln_cat.texto = v['categoria']
-                        self.vuln_sev.texto = v['severidade']
-                        self.vuln_stat.texto = v['status']
+                        self.vuln_sev.definir_valor(v['severidade'].lower())
+                        self.vuln_stat.definir_valor(Equipamento.normalizar_status_vulnerabilidade(v['status']))
                         self.vuln_log.texto = ""
                         self.definir_mensagem(f"SELECIONADO: {v['nome']}. Descreva no Log o que fará para corrigir.", COR_AMBAR)
                         return
@@ -426,6 +741,10 @@ class App:
                 rect_btn_corrigir = pygame.Rect(500, 520, 200, 48)
                 
                 if rect_btn_registrar.collidepoint(pos_mouse):
+                    if not self.vuln_modelo.texto:
+                        self.definir_mensagem("Selecione uma vulnerabilidade do catálogo.", COR_LARANJA)
+                        return
+
                     # Traduz Hostname para ID
                     alvo = self.vuln_id.texto.strip().lower()
                     id_resolvido = alvo
@@ -434,10 +753,20 @@ class App:
                             id_resolvido = str(d.get('id', ''))
                             break
 
+                    ativo_alvo = next(
+                        (d for d in self.ativos_brutos if str(d.get('id', '')) == id_resolvido),
+                        None
+                    )
+                    if ativo_alvo and str(ativo_alvo.get('tipo', '')).upper() == "SERVIDOR":
+                        self.vuln_sev.definir_valor("critica")
+
                     sucesso = registrar_vulnerabilidade(id_resolvido, self.vuln_cve.texto, self.vuln_desc.texto, self.vuln_cat.texto, self.vuln_sev.texto, self.vuln_stat.texto)
                     if sucesso:
                         self.adicionar_log("INCIDENTE", id_resolvido, f"Nova falha reportada. CVE: {self.vuln_cve.texto}")
                         for c in self.campos_vuln: c.texto = ""
+                        self._limpar_busca_nvd()
+                        self.vuln_sev.definir_valor("")
+                        self.vuln_stat.definir_valor(Equipamento.STATUS_ABERTO)
                         self.definir_mensagem("PERIGO: Vulnerabilidade de rede registrada!", COR_VERMELHO_NEON)
                     else:
                         self.definir_mensagem("ERRO: Verifique as regras/tuplas ou se o ID existe.", COR_VERMELHO_NEON)
@@ -459,10 +788,13 @@ class App:
                             id_resolvido = str(d.get('id', ''))
                             break
                             
-                    sucesso = corrigir_vulnerabilidade(id_resolvido, self.vuln_cve.texto)
+                    sucesso = corrigir_vulnerabilidade(id_resolvido, self.vuln_cve.texto, self.vuln_desc.texto)
                     if sucesso:
                         self.adicionar_log("CORREÇÃO", id_resolvido, log_texto)
                         for c in self.campos_vuln: c.texto = ""
+                        self._limpar_busca_nvd()
+                        self.vuln_sev.definir_valor("")
+                        self.vuln_stat.definir_valor(Equipamento.STATUS_ABERTO)
                         self.definir_mensagem(f"SUCESSO! Ativo Seguro. Log salvo.", COR_VERDE_MATRIX)
                     else:
                         self.definir_mensagem("ERRO: Ativo não encontrado ou CVE não cadastrado.", COR_VERMELHO_NEON)
@@ -503,6 +835,8 @@ class App:
             elif self.aba_crud_ativa == "REMOVER": campos_ativos = self.campos_rem
         elif self.modal_ativo == "VULN_PATCH":
             campos_ativos = self.campos_vuln
+
+        self._processar_busca_nvd()
 
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT: self.rodando = False
@@ -554,7 +888,19 @@ class App:
                         campos_ativos[0].cor = campos_ativos[0].cor_ativa
 
             for campo in campos_ativos:
+                texto_anterior = campo.texto
+                filtro_anterior = campo.filtro if campo is self.vuln_modelo else None
                 campo.processar_evento(evento)
+                if campo is self.vuln_modelo:
+                    if campo.texto != texto_anterior:
+                        if campo.texto == "__NVD_MORE__":
+                            campo.definir_valor("")
+                            self._programar_proxima_pagina_nvd()
+                        else:
+                            self.preencher_vulnerabilidade_predefinida(campo.texto)
+                    if campo.filtro != filtro_anterior:
+                        self.preencher_vulnerabilidade_predefinida("")
+                        self._programar_busca_nvd(campo.filtro)
 
             if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 self.tratar_clique(pos_mouse)
@@ -632,7 +978,7 @@ class App:
         self.tela.blit(self.fonte_p.render(f"[ {rotulo_pc} ]", True, self.cor_alerta_atual if self.alerta_ativo else COR_VERDE_MATRIX), (self.rect_workstation.x, self.rect_workstation.y - 20))
 
         # =======================================================
-        # 1. ALERTA DA WORKSTATION (EMOJI BUG)
+        # 1. ALERTA DA WORKSTATION (EMOJI Bug)
         # =======================================================
         if self.alerta_ativo:
             bug_x = self.rect_workstation.x + 75
@@ -876,13 +1222,18 @@ class App:
                 nome = ativo.get('nome', 'UNK').upper()
                 risco_efetivo = obter_risco_efetivo(nome)
                 
-                vulns_abertas = [v for v in ativo.get('vulnerabilidades', []) if v.get('status', '').lower() != 'corrigida']
+                vulns_abertas = [v for v in ativo.get('vulnerabilidades', []) if Equipamento.vulnerabilidade_esta_aberta(v)]
                 tem_alerta = len(vulns_abertas) > 0
                 
                 # CORREÇÃO: COR DE BORDA DINÂMICA NA ÁRVORE DE INFRA
                 if tem_alerta:
                     pesos = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
                     max_sev = max([pesos.get(v.get('severidade', 'baixa').lower(), 1) for v in vulns_abertas])
+                    severidade_principal = next(
+                        v.get('severidade', 'baixa').upper()
+                        for v in vulns_abertas
+                        if pesos.get(v.get('severidade', 'baixa').lower(), 1) == max_sev
+                    )
                     
                     if max_sev == 1: cor_borda = COR_AMBAR
                     elif max_sev == 2: cor_borda = COR_LARANJA
@@ -934,12 +1285,19 @@ class App:
 
                 nome_lbl = self.fonte_m.render(nome[:8], True, COR_TEXTO)
                 risco_lbl = self.fonte_p.render(f"Risco: {risco_efetivo}", True, cor_borda)
+                severidade_lbl = self.fonte_p.render(
+                    f"Sev: {severidade_principal}" if tem_alerta else "",
+                    True,
+                    cor_borda
+                )
                 
                 offset_y_nome = -75 if tipo == "SERVIDOR" else -50
                 offset_y_risco = 55 if tipo == "SERVIDOR" else 35
                 
                 self.tela.blit(nome_lbl, (x - nome_lbl.get_width()//2, y + offset_y_nome))
                 self.tela.blit(risco_lbl, (x - risco_lbl.get_width()//2, y + offset_y_risco))
+                if tem_alerta:
+                    self.tela.blit(severidade_lbl, (x - severidade_lbl.get_width()//2, y + offset_y_risco + 16))
 
                 if tem_alerta:
                     pygame.draw.circle(self.tela, (0,0,0), (x + 30, y - 30), 12)
@@ -1055,7 +1413,7 @@ class App:
                     pygame.draw.rect(self.tela, (25, 10, 15), r_item)
                     pygame.draw.rect(self.tela, (60, 20, 30), r_item, 1)
                     
-                    texto_vuln = f"ID:{v['id_ativo']} | {v['nome']} | CVE: {v['cve']}"
+                    texto_vuln = f"ID:{v['id_ativo']} | {v['nome']} | CVE: {v['cve']} | {v['severidade'].upper()}"
                     
                     # CORREÇÃO DE COR DINÂMICA
                     sev_list = v['severidade'].lower()
@@ -1068,7 +1426,7 @@ class App:
                     self.rects_vulns.append((r_item, v))
             
             if self.mensagem_status:
-                self.tela.blit(self.fonte_m.render(self.mensagem_status, True, self.cor_status), (280, 490))
+                self.tela.blit(self.fonte_m.render(self.mensagem_status, True, self.cor_status), (280, 498))
                 
             btn_patch = pygame.Rect(280, 520, 200, 48)
             pygame.draw.rect(self.tela, (60, 0, 0), btn_patch)
@@ -1085,6 +1443,8 @@ class App:
             pygame.draw.rect(self.tela, cor_fundo_fix, btn_fix)
             pygame.draw.rect(self.tela, cor_borda_fix, btn_fix, 2)
             self.tela.blit(self.fonte_m.render("CORRIGIR", True, cor_texto_fix), (btn_fix.x + 55, btn_fix.y + 14))
+
+            self.vuln_modelo.desenhar_menu(self.tela)
 
     # ==========================================
     # SUB-SESSÃO: LOOP DE EXECUÇÃO
