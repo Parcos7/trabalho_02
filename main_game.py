@@ -11,6 +11,7 @@ from CRUD.atualizar import atualizar_ativo
 from CRUD.remover import remover_ativo
 from vulnerabilidades import CATALOGO_VULNERABILIDADES, registrar_vulnerabilidade, corrigir_vulnerabilidade
 from CRUD.risco import calcular_risco_global
+from CRUD.risco_salas import calcular_relatorio_risco_por_sala
 from integracoes.nvd_api import NvdCveSearchWorker
 
 # ==========================================
@@ -638,7 +639,7 @@ class App:
             self.servidor_foco_painel = servidores_ids[0] if servidores_ids else None
             
         try:
-            self.relatorio_risco = calcular_risco_global()
+            self.relatorio_risco = calcular_relatorio_risco_por_sala()
         except Exception as e:
             self.relatorio_risco = [
                 "[ERRO CRÍTICO] Falha ao calcular a Matriz de Risco.",
@@ -701,6 +702,10 @@ class App:
                         if not patrimonio.isdigit() or len(patrimonio) < 4:
                             self.definir_mensagem("O patrimônio deve ter pelo menos 4 dígitos.", COR_VERMELHO_NEON)
                             return
+                        patrimonio_normalizado = str(int(patrimonio))
+                        if any(str(ativo.get('id', '')) == patrimonio_normalizado for ativo in self.ativos_brutos):
+                            self.definir_mensagem(f"Patrimônio {patrimonio} já cadastrado. Informe outro.", COR_VERMELHO_NEON)
+                            return
                         if any(char.isdigit() for char in resp_limpo):
                             self.definir_mensagem("ERRO VALIDAÇÃO: O responsável não pode ter números.", COR_VERMELHO_NEON)
                             return
@@ -711,6 +716,21 @@ class App:
 
                         prefixo = self.prefixos_hostname[tipo_ativo]
                         hostname = f"{prefixo}{patrimonio}"
+                        if any(str(ativo.get('nome', '')).casefold() == hostname.casefold() for ativo in self.ativos_brutos):
+                            self.definir_mensagem(f"Hostname {hostname} já cadastrado. Informe outro patrimônio.", COR_VERMELHO_NEON)
+                            return
+
+                        dado_extra = self.cad_extra.texto.strip()
+                        if tipo_ativo in ("NOTEBOOK", "DESKTOP") and (not dado_extra.isdigit() or int(dado_extra) < 1):
+                            self.definir_mensagem("Informe a memória RAM em GB usando um inteiro positivo.", COR_VERMELHO_NEON)
+                            return
+                        if tipo_ativo == "SERVIDOR" and not dado_extra:
+                            self.definir_mensagem("Informe o sistema operacional do servidor.", COR_VERMELHO_NEON)
+                            return
+                        if tipo_ativo == "ROTEADOR" and dado_extra.casefold() not in ("s", "sim", "atualizado", "yes", "y", "n", "não", "nao", "desatualizado", "no"):
+                            self.definir_mensagem("Informe S ou N para o estado do firmware.", COR_VERMELHO_NEON)
+                            return
+
                         sucesso = cadastrar_ativo(
                             patrimonio,
                             hostname,
@@ -730,7 +750,7 @@ class App:
                             self._atualizar_rotulo_dado_extra()
                             self.definir_mensagem(f"SUCESSO: Ativo ({tipo_ativo}) cadastrado!", COR_VERDE_MATRIX)
                         else:
-                            self.definir_mensagem("ERRO: Dados duplicados, vazios ou incorretos.", COR_VERMELHO_NEON)
+                            self.definir_mensagem("Cadastro não concluído. Confira os dados informados.", COR_VERMELHO_NEON)
                         self.sincronizar_dados()
                         if sucesso:
                             self.cad_loc.definir_valor(loc_limpo)
@@ -1370,7 +1390,18 @@ class App:
                 self.tela.blit(self.fonte_p.render("visualizar os dados.", True, (60, 80, 100)), (area_detalhe.x + 10, area_detalhe.y + 140))
 
         elif self.modal_ativo == "SERVIDOR_INFRA":
-            self.tela.blit(self.fonte_g.render("INFRAESTRUTURA: TOPOLOGIA DE RISCO (GAVETAS)", True, COR_AMBAR), (rect_modal.x + 30, rect_modal.y + 24))
+            linha_global = next(
+                (linha for linha in self.relatorio_risco if linha.startswith("RISCO GLOBAL EFETIVO TOTAL:")),
+                "RISCO GLOBAL EFETIVO TOTAL: N/A"
+            )
+            risco_global_total = linha_global.split(":", 1)[1].strip()
+            servidor_focado = next(
+                (servidor for servidor in self.ativos_brutos if str(servidor.get('id', '')) == str(self.servidor_foco_painel)),
+                None
+            )
+            sala_focada = str(servidor_focado.get('local', '')).strip() if servidor_focado else ""
+            titulo_risco = f"RISCO DA SALA {sala_focada or '—'} | GLOBAL: {risco_global_total}"
+            self.tela.blit(self.fonte_g.render(titulo_risco, True, COR_AMBAR), (rect_modal.x + 30, rect_modal.y + 24))
             
             # 1. DIVIDIR A TELA EM DOIS PAINÉIS
             area_gavetas = pygame.Rect(rect_modal.x + 20, rect_modal.y + 70, 200, 460)
@@ -1516,8 +1547,13 @@ class App:
                     
                     cx_srv = area_arvore.x + (area_arvore.width // 2)
                     
-                    roteadores = [a for a in self.ativos_brutos if a.get('tipo', '').upper() == 'ROTEADOR']
-                    endpoints = [a for a in self.ativos_brutos if a.get('tipo', '').upper() in ['NOTEBOOK', 'DESKTOP']]
+                    sala_focada_normalizada = str(srv_alvo.get('local', '')).strip().casefold()
+                    ativos_da_sala = [
+                        ativo for ativo in self.ativos_brutos
+                        if str(ativo.get('local', '')).strip().casefold() == sala_focada_normalizada
+                    ]
+                    roteadores = [a for a in ativos_da_sala if a.get('tipo', '').upper() == 'ROTEADOR']
+                    endpoints = [a for a in ativos_da_sala if a.get('tipo', '').upper() in ['NOTEBOOK', 'DESKTOP']]
                     
                     pos_roteadores = []
                     
