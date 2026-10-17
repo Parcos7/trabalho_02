@@ -2,7 +2,13 @@ import sys
 import random
 import pygame
 from ativos import Equipamento
-from vulnerabilidades import CATALOGO_VULNERABILIDADES
+from persistencia import ler_db
+from CRUD.cadastro import cadastrar_ativo
+from CRUD.atualizar import atualizar_ativo
+from CRUD.remover import remover_ativo
+from vulnerabilidades import CATALOGO_VULNERABILIDADES, registrar_vulnerabilidade, corrigir_vulnerabilidade
+from CRUD.risco import calcular_risco_global
+from CRUD.risco_salas import calcular_relatorio_risco_por_sala
 from integracoes.nvd_api import NvdCveSearchWorker
 from interface.configuracoes import *
 from interface.componentes import CaixaTexto, CaixaSelecao
