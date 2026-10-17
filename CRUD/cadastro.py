@@ -24,8 +24,10 @@ def amarrar_dependencia_automatica(novo_ativo_obj, db_inventario, tipo_ativo):
         alvo_desejado = "SERVIDOR"
 
 
+    sala_novo = str(novo_ativo_obj.local).strip().casefold()
     for id_existente, dados in db_inventario.items():
-        if dados.get("tipo", "").upper() == alvo_desejado:
+        sala_existente = str(dados.get("local", "")).strip().casefold()
+        if dados.get("tipo", "").upper() == alvo_desejado and sala_existente == sala_novo:
 
             novo_ativo_obj.dependencias.append({
                 "id_alvo": str(id_existente),

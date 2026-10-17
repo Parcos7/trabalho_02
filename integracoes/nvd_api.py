@@ -125,13 +125,69 @@ class NvdCveApi:
                 severidade = mapa_severidade.get(severidade_api, severidade)
                 break
 
+        versao_corrigida = ""
+        for config in cve.get("configurations", []):
+            for no in config.get("nodes", []):
+                for match in no.get("cpeMatch", []):
+                    if match.get("versionEndExcluding"):
+                        versao_corrigida = f"versão {match['versionEndExcluding']} ou superior"
+                        break
+                    if match.get("versionEndIncluding"):
+                        versao_corrigida = f"versão posterior à {match['versionEndIncluding']}"
+                        break
+                if versao_corrigida:
+                    break
+            if versao_corrigida:
+                break
+
+        referencia_patch = ""
+        referencias = cve.get("references", [])
+        for ref in referencias:
+            tags = [str(t).lower() for t in ref.get("tags", [])]
+            if any(tag in tags for tag in ("patch", "mitigation", "vendor advisory")):
+                referencia_patch = str(ref.get("url", "")).strip()
+                break
+        if not referencia_patch and referencias:
+            referencia_patch = str(referencias[0].get("url", "")).strip()
+
+        desc_low = descricao.lower()
+        cat_up = categoria.upper()
+        if "CWE-89" in cat_up or "sql injection" in desc_low:
+            acao_base = "Aplicar consultas parametrizadas (Prepared Statements) e validar entradas."
+        elif "CWE-79" in cat_up or "cross-site scripting" in desc_low or " xss" in desc_low:
+            acao_base = "Filtrar e escapar dados exibidos na página web e atualizar o sistema."
+        elif any(c in cat_up for c in ("CWE-78", "CWE-77", "CWE-94")) or "remote code execution" in desc_low or "command injection" in desc_low or "arbitrary code" in desc_low:
+            acao_base = "Bloquear execução de comandos externos não validados e aplicar o patch de segurança."
+        elif any(c in cat_up for c in ("CWE-119", "CWE-120", "CWE-125", "CWE-787", "CWE-416")) or "overflow" in desc_low or "out-of-bounds" in desc_low or "use-after-free" in desc_low:
+            acao_base = "Atualizar o pacote ou biblioteca para corrigir o acesso indevido à memória."
+        elif any(c in cat_up for c in ("CWE-287", "CWE-306", "CWE-798", "CWE-522")) or "authentication" in desc_low or "credentials" in desc_low or "password" in desc_low:
+            acao_base = "Reforçar a autenticação, substituir credenciais expostas e exigir verificação forte."
+        elif any(c in cat_up for c in ("CWE-269", "CWE-284", "CWE-862", "CWE-863")) or "privilege" in desc_low or "authorization" in desc_low or "access control" in desc_low:
+            acao_base = "Restringir permissões de acesso aplicando o princípio do menor privilégio."
+        elif "CWE-22" in cat_up or "path traversal" in desc_low or "directory traversal" in desc_low:
+            acao_base = "Validar caminhos de arquivos no servidor e bloquear acessos fora da pasta permitida."
+        elif any(c in cat_up for c in ("CWE-400", "CWE-770")) or "denial of service" in desc_low:
+            acao_base = "Limitar a taxa de requisições no firewall/servidor e aplicar a correção de estabilidade."
+        elif "CWE-502" in cat_up or "deserialization" in desc_low:
+            acao_base = "Desativar a leitura de objetos não confiáveis e atualizar o componente afetado."
+        else:
+            acao_base = f"Instalar a atualização de segurança do fabricante referente ao {identificador} ({categoria})."
+
+        partes_sugestao = [acao_base]
+        if versao_corrigida:
+            partes_sugestao.append(f"NVD indica correção na {versao_corrigida}.")
+        if referencia_patch:
+            partes_sugestao.append(f"Boletim NVD: {referencia_patch}")
+        sugestao_correcao = " ".join(partes_sugestao)
+
         return {
             "id": identificador,
             "nome": f"{identificador} | {descricao or 'Sem descrição disponível'}",
             "cve": identificador,
             "descricao": descricao or "Sem descrição disponível",
             "categoria": categoria,
-            "severidade": severidade
+            "severidade": severidade,
+            "sugestao_correcao": sugestao_correcao
         }
 
 

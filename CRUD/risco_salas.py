@@ -49,21 +49,28 @@ def _calcular_riscos_da_rede(equipamentos):
     peso_dependentes = np.zeros(quantidade_equipamentos)
 
     for indice, equipamento in enumerate(equipamentos):
+        sala_atual = str(equipamento.get('local', '')).strip().casefold()
         dependencias = [
             dependencia for dependencia in equipamento.get('dependencias', [])
             if str(dependencia.get('id_alvo', '')) in indices_por_id
+            and str(equipamentos[indices_por_id[str(dependencia.get('id_alvo', ''))]].get('local', '')).strip().casefold() == sala_atual
         ]
 
         if not dependencias:
             tipos_pai_esperados = tipos_pai.get(str(equipamento.get('tipo', '')).upper(), ())
-            equipamento_pai = next(
-                (
-                    candidato for candidato in equipamentos
-                    if str(candidato.get('tipo', '')).upper() in tipos_pai_esperados
-                    and str(candidato.get('id', '')) != str(equipamento.get('id', ''))
-                ),
-                None
-            )
+            equipamento_pai = None
+            for tipo_pai_esperado in tipos_pai_esperados:
+                equipamento_pai = next(
+                    (
+                        candidato for candidato in equipamentos
+                        if str(candidato.get('tipo', '')).upper() == tipo_pai_esperado
+                        and str(candidato.get('local', '')).strip().casefold() == sala_atual
+                        and str(candidato.get('id', '')) != str(equipamento.get('id', ''))
+                    ),
+                    None
+                )
+                if equipamento_pai:
+                    break
             if equipamento_pai:
                 dependencias = [{
                     'id_alvo': str(equipamento_pai.get('id', '')),
