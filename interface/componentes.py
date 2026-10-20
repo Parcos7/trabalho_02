@@ -149,7 +149,6 @@ class CaixaSelecao:
                 ]
                 for indice_visivel, (_, valor) in enumerate(opcoes_visiveis):
                     if self._rect_opcao(indice_visivel).collidepoint(evento.pos) and valor:
-                        indice = self.indice_menu_inicio + indice_visivel
                         self.definir_valor(valor)
                         self.menu_aberto = False
                         self.ativo = True

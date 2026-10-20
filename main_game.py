@@ -33,7 +33,6 @@ class App(GerenciadorEstado, ProcessadorEventos, RenderizadorGrafico):
         self.fonte_p = pygame.font.SysFont("Consolas", 14)
         self.fonte_m = pygame.font.SysFont("Consolas", 16, bold=True)
         self.fonte_g = pygame.font.SysFont("Consolas", 24, bold=True)
-        self.fonte_emoji = pygame.font.SysFont("Segoe UI Emoji", 26)
 
         self.rect_notebook = pygame.Rect(490, 470, 180, 100)
         self.rect_servidor = pygame.Rect(1020, 160, 200, 480)
@@ -48,7 +47,6 @@ class App(GerenciadorEstado, ProcessadorEventos, RenderizadorGrafico):
         self.cor_alerta_atual = COR_VERDE_MATRIX
         self.nivel_alerta_str = "SEGURO"
         
-        self.lista_ativos_display = []
         self.ativos_brutos = [] 
         self.relatorio_risco = []
         

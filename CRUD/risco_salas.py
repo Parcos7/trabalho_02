@@ -118,7 +118,6 @@ def calcular_relatorio_risco_por_sala():
     risco_global_formatado = f'{risco_global:.2f}' if risco_global is not None else 'N/A'
     linhas = [
         f'RISCO GLOBAL EFETIVO TOTAL: {risco_global_formatado}',
-        '================ RELATÓRIO DE RISCO POR SALA ================',
         f'Matriz de rede: {len(equipamentos)}x{quantidade_vulnerabilidades} | Determ.: {determinante:.2f}'
     ]
 
@@ -146,8 +145,5 @@ def calcular_relatorio_risco_por_sala():
             linhas.append(
                 f'[{nome:<8}] Risco Próprio: {riscos_proprios[indice]:5.2f} | Risco Efetivo: {risco_efetivo}'
             )
-
-    if not equipamentos:
-        linhas.append('Nenhum ativo cadastrado para calcular risco por sala.')
 
     return linhas

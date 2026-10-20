@@ -1,13 +1,3 @@
-# =====================================================================
-# NOTA DE NOMENCLATURA PESSOAL:
-# 'db'  -> Simplificação de "base de dados"
-# 'arq' -> Simplificação de "ficheiros" ou "ficheiro"
-# 'res' -> Simplificação de "Responsavel"
-# 'loc' -> Simplificação de "Localidade"
-# 'fw' -> Simplificação de "firmware"
-# 'so' -> Simplificação de "Sistema Operacional"
-# =====================================================================
-
 from abc import ABC, abstractmethod
 
 class Equipamento(ABC):
@@ -37,11 +27,6 @@ class Equipamento(ABC):
     @classmethod
     def vulnerabilidade_esta_aberta(cls, vulnerabilidade):
         return cls.normalizar_status_vulnerabilidade(vulnerabilidade.get('status', '')) == cls.STATUS_ABERTO
-
-    def exibir_informacoes(self):
-        print(f"\n[ID: {self.id}] - {self.nome}\n"\
-              f"Responsável: {self.responsavel} | Local: {self.local}\n" \
-              f"Total de vulnerabilidades: {len(self.vulnerabilidades)}")
 
     @abstractmethod
     def fator_exposicao(self):

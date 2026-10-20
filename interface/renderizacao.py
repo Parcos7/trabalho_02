@@ -116,16 +116,30 @@ class RenderizadorGrafico:
         self.tela.blit(self.fonte_p.render(f"[ {rotulo_pc} ]", True, self.cor_alerta_atual if self.alerta_ativo else COR_VERDE_MATRIX), (self.rect_workstation.x, self.rect_workstation.y - 20))
 
         # =======================================================
-        # 1. ALERTA DA WORKSTATION (EMOJI Bug)
+        # 1. ALERTA DA WORKSTATION
         # =======================================================
         if self.alerta_ativo and piscar:
-            bug_x = rect_pc_tela.centerx - 9
-            bug_y = rect_pc_tela.centery - 15
-            
-            try: 
-                self.tela.blit(self.fonte_emoji.render("👾", True, (255, 255, 255)), (bug_x - 6, bug_y - 2))
-            except Exception: 
-                self.tela.blit(self.fonte_g.render("!", True, self.cor_alerta_atual), (bug_x + 2, bug_y))
+            sprite_bug = [
+                '  X     X  ',
+                '   X   X   ',
+                '  XXXXXXX  ',
+                ' XX XXX XX ',
+                'XXXXXXXXXXX',
+                'X XXXXXXX X',
+                'X X     X X',
+                '   XX XX   '
+            ]
+            tam_px = 3
+            inicio_x = rect_pc_tela.centerx - (11 * tam_px) // 2
+            inicio_y = rect_pc_tela.centery - (8 * tam_px) // 2
+            for linha_idx, linha_px in enumerate(sprite_bug):
+                for col_idx, char_px in enumerate(linha_px):
+                    if char_px == 'X':
+                        pygame.draw.rect(
+                            self.tela,
+                            self.cor_alerta_atual,
+                            (inicio_x + col_idx * tam_px, inicio_y + linha_idx * tam_px, tam_px, tam_px)
+                        )
 
         # =======================================================
         # 2. DASHBOARD / TELÃO
@@ -321,6 +335,16 @@ class RenderizadorGrafico:
                     if 'firmware_atualizado' in ativo:
                         firmware = "Atualizado" if ativo['firmware_atualizado'] else "Desatualizado"
                         detalhes.append(("Firmware", firmware))
+                    nome_busca_crud = str(ativo.get('nome', ativo.get('id', ''))).lower()
+                    r_prop_crud, r_efet_crud = "0.00", "0.00"
+                    for linha_r in self.relatorio_risco:
+                        if f"[{nome_busca_crud}" in linha_r.lower() and "Risco Próprio:" in linha_r:
+                            partes_r = linha_r.split("|")
+                            r_prop_crud = partes_r[0].split("Risco Próprio:")[-1].strip()
+                            if len(partes_r) > 1:
+                                r_efet_crud = partes_r[1].split("Risco Efetivo:")[-1].strip()
+                            break
+                    detalhes.append(("Risco (Próprio / Efetivo)", f"{r_prop_crud} / {r_efet_crud}"))
 
                     self.tela.set_clip(pygame.Rect(painel_detalhes.x + 8, painel_detalhes.y + 34, painel_detalhes.width - 16, painel_detalhes.height - 42))
                     for indice, (rotulo, valor) in enumerate(detalhes):
@@ -534,17 +558,22 @@ class RenderizadorGrafico:
 
             self.rects_matriz_risco = []
 
-            def obter_risco_efetivo(nome_busca):
+            def obter_riscos_ativo(nome_busca):
                 for linha in self.relatorio_risco:
-                    if f"[{nome_busca.lower()}" in linha.lower():
-                        try: return linha.split("Risco Efetivo:")[-1].strip()
-                        except: pass
-                return "0.00"
+                    if f"[{nome_busca.lower()}" in linha.lower() and "Risco Próprio:" in linha:
+                        try:
+                            partes_r = linha.split("|")
+                            r_prop = partes_r[0].split("Risco Próprio:")[-1].strip()
+                            r_efet = partes_r[1].split("Risco Efetivo:")[-1].strip() if len(partes_r) > 1 else "0.00"
+                            return r_prop, r_efet
+                        except Exception:
+                            pass
+                return "0.00", "0.00"
 
             def desenhar_icone_ativo(x, y, ativo, modo_compacto=False):
                 tipo = ativo.get('tipo', '').upper()
                 nome = ativo.get('nome', 'UNK').upper()
-                risco_efetivo = obter_risco_efetivo(nome)
+                risco_proprio, risco_efetivo = obter_riscos_ativo(nome)
                 
                 vulns_abertas = [v for v in ativo.get('vulnerabilidades', []) if Equipamento.vulnerabilidade_esta_aberta(v)]
                 tem_alerta = len(vulns_abertas) > 0
@@ -621,22 +650,17 @@ class RenderizadorGrafico:
                     pygame.draw.rect(self.tela, cor_borda, rect_vis, 2, border_radius=4)
 
                 nome_lbl = self.fonte_p.render(nome[:8] if modo_compacto else nome[:10], True, COR_TEXTO)
-                txt_risco_no = f"R:{risco_efetivo}" if modo_compacto else f"Risco: {risco_efetivo}"
-                risco_lbl = self.fonte_p.render(txt_risco_no, True, cor_borda)
                 txt_sev_no = severidade_principal if (tem_alerta and modo_compacto) else (f"Nível: {severidade_principal}" if tem_alerta else "")
                 severidade_lbl = self.fonte_p.render(txt_sev_no, True, cor_borda)
                 
                 offset_y_nome = -68 if tipo == "SERVIDOR" else -42
-                offset_y_risco = 54 if tipo == "SERVIDOR" else 30
+                offset_y_abaixo = 54 if tipo == "SERVIDOR" else 30
                 
                 pos_nome = (int(x - nome_lbl.get_width() // 2), int(y + offset_y_nome))
-                pos_risco = (int(x - risco_lbl.get_width() // 2), int(y + offset_y_risco))
                 pygame.draw.rect(self.tela, (10, 15, 20), (pos_nome[0] - 2, pos_nome[1], nome_lbl.get_width() + 4, nome_lbl.get_height()))
                 self.tela.blit(nome_lbl, pos_nome)
-                pygame.draw.rect(self.tela, (10, 15, 20), (pos_risco[0] - 2, pos_risco[1], risco_lbl.get_width() + 4, risco_lbl.get_height()))
-                self.tela.blit(risco_lbl, pos_risco)
                 if tem_alerta:
-                    pos_sev = (int(x - severidade_lbl.get_width() // 2), int(y + offset_y_risco + 15))
+                    pos_sev = (int(x - severidade_lbl.get_width() // 2), int(y + offset_y_abaixo))
                     pygame.draw.rect(self.tela, (10, 15, 20), (pos_sev[0] - 2, pos_sev[1], severidade_lbl.get_width() + 4, severidade_lbl.get_height()))
                     self.tela.blit(severidade_lbl, pos_sev)
 
@@ -734,6 +758,15 @@ class RenderizadorGrafico:
                         desenhar_icone_ativo(rx, ry, rot, modo_compacto=compacto_rot)
                         
                     desenhar_icone_ativo(cx_srv, y_srv, srv_alvo, modo_compacto=False)
+                    linha_matriz = next((l for l in self.relatorio_risco if l.startswith("Matriz de rede:")), "")
+                    linha_ciclo = next((l for l in self.relatorio_risco if l.startswith("ALERTA:")), "")
+                    texto_rodape_arvore = linha_ciclo if linha_ciclo else linha_matriz
+                    if texto_rodape_arvore:
+                        cor_rodape = COR_VERMELHO_NEON if linha_ciclo else COR_TEXTO_MUTED
+                        while texto_rodape_arvore and self.fonte_p.size(texto_rodape_arvore)[0] > area_arvore.width - 16:
+                            texto_rodape_arvore = texto_rodape_arvore[:-1]
+                        lbl_mat = self.fonte_p.render(texto_rodape_arvore, True, cor_rodape)
+                        self.tela.blit(lbl_mat, (area_arvore.centerx - lbl_mat.get_width() // 2, area_arvore.bottom - 22))
             else:
                 self.tela.blit(self.fonte_p.render("<- Selecione um servidor.", True, COR_TEXTO_MUTED), (area_arvore.x + 20, area_arvore.y + 40))
             self.tela.set_clip(None)
@@ -745,8 +778,8 @@ class RenderizadorGrafico:
             )
             if ativo_insp:
                 nome_insp = ativo_insp.get('nome', 'UNK').upper()
-                risco_insp = obter_risco_efetivo(nome_insp)
-                resumo_no = f"Ativo: {nome_insp} | Risco: {risco_insp}"
+                risco_prop_insp, risco_insp = obter_riscos_ativo(nome_insp)
+                resumo_no = f"{nome_insp} | P:{risco_prop_insp} | E:{risco_insp}"
                 while resumo_no and self.fonte_p.size(resumo_no)[0] > area_patch.width - 16:
                     resumo_no = resumo_no[:-1]
                 self.tela.blit(self.fonte_p.render(resumo_no, True, COR_AMBAR), (area_patch.x + 8, area_patch.y + 30))

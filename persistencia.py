@@ -1,9 +1,3 @@
-### =====================================================================
-### NOTA DE NOMENCLATURA PESSOAL:
-### 'db'  -> Simplificação de "banco_de_dados"
-### 'arq' -> Simplificação de "arquivos" ou "arquivo"
-### =====================================================================
-
 import json
 
 nome_db = 'inventario_db.json'

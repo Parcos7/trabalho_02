@@ -1,9 +1,3 @@
-### =====================================================================
-### NOTA DE NOMENCLATURA PESSOAL:
-### 'db'  -> Simplificação de "banco_de_dados"
-### 'arq' -> Simplificação de "arquivos" ou "arquivo"
-### =====================================================================
-
 from persistencia import ler_db, salvar_db
 from ativos import Equipamento
 
@@ -104,25 +98,18 @@ def registrar_vulnerabilidade(id_busca, cve_input, descricao, categoria, sev, st
             ativo_obj.vulnerabilidades = dados.get('vulnerabilidades', [])
             ativo_obj.dependencias = dados.get('dependencias', [])
             
-            print(f"\n[ ATIVO SELECIONADO: {ativo_obj.nome} ]")
-            
             vul = {}
             
-            # Tratamento do CVE 
             cve_input = str(cve_input).strip().upper()
             vul['cve'] = cve_input if cve_input != "" else "N/A"
             
-            # Validação da Descrição
             descricao = str(descricao).strip()
             if not descricao:
-                print("\n[ERRO] A descrição da fragilidade não pode ficar vazia.")
                 return False
             vul['descricao'] = descricao
             
-            # Validação da Categoria
             categoria = str(categoria).strip()
             if not categoria:
-                print("\n[ERRO] A categoria não pode ficar vazia.")
                 return False
 
             vulnerabilidade_predefinida = next(
@@ -142,7 +129,6 @@ def registrar_vulnerabilidade(id_busca, cve_input, descricao, categoria, sev, st
                 vul['descricao'] = descricao
             vul['categoria'] = categoria
             
-            # Validação da Severidade
             sev = str(sev).strip().lower()
             if vulnerabilidade_predefinida:
                 sev = vulnerabilidade_predefinida['severidade']
@@ -150,26 +136,18 @@ def registrar_vulnerabilidade(id_busca, cve_input, descricao, categoria, sev, st
                 sev = "critica"
             severidades_validas = tuple(Equipamento.PESOS_SEVERIDADE)
             if sev not in severidades_validas:
-                print(f"\n[ERRO] Severidade inválida. Digite uma destas: {severidades_validas}")
                 return False
             vul['severidade'] = sev
                 
-            # Validação do Status 
             stat = str(stat).strip().lower()
             status_validos = (Equipamento.STATUS_ABERTO, Equipamento.STATUS_FECHADO)
             if stat not in status_validos:
-                print(f"\n[ERRO] Status inválido. Digite um destes: {status_validos}")
                 return False
             vul['status'] = stat
-                        
 
             ativo_obj.adicionar_vulnerabilidade(vul)
             db_inventario[id_busca] = ativo_obj.__dict__
             salvar_db(db_inventario)
-            
-            print(f"\n[SISTEMA] Sucesso: Vulnerabilidade registrada e vinculada ao ativo '{ativo_obj.nome}' no db!")
             return True
         
-    else:
-        print("\n[ERRO] Nenhum ativo encontrado com esse ID no db. Cadastre o ativo primeiro.")
-        return False
+    return False

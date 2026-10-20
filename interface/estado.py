@@ -236,7 +236,6 @@ class GerenciadorEstado:
 
     def sincronizar_dados(self):
         db_inventario = ler_db()
-        self.lista_ativos_display = []
         self.lista_vulns_ativas = []
         self.ativos_brutos = []
         self.alerta_ativo = False
@@ -250,10 +249,8 @@ class GerenciadorEstado:
             vulns = dados.get('vulnerabilidades', [])
             
             vulns_em_aberto = [v for v in vulns if Equipamento.vulnerabilidade_esta_aberta(v)]
-            status_txt = "ONLINE/SEGURO"
             
             if vulns_em_aberto:
-                status_txt = f"ALERTA ({vulns_em_aberto[0].get('cve', 'N/A')})"
                 self.alerta_ativo = True
                 
                 for v in vulns_em_aberto:
@@ -271,9 +268,6 @@ class GerenciadorEstado:
                         "severidade": v.get('severidade', ''),
                         "status": v.get('status', 'aberta')
                     })
-            
-            linha = f"ID: {dados['id']} | HOST: {dados.get('nome',''):<10} | STATUS: {status_txt}"
-            self.lista_ativos_display.append(linha)
 
         self._atualizar_opcoes_salas()
         ativos_filtrados = self._ativos_filtrados()
