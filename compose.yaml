@@ -10,8 +10,8 @@ services:
     restart: unless-stopped
     ports:
       - "${PORTA_EXTERNA:-2214}:8080"
-    volumes:
-      - ./inventario_db.json:/app/inventario_db.json
+   # volumes:
+    #  - ./inventario_db.json:/app/inventario_db.json
     environment:
       - DISPLAY=:0
       - PYTHONUNBUFFERED=1
