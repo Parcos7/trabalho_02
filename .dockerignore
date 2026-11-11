@@ -1,6 +1,6 @@
-# ==============================================================================
+"# ==============================================================================
 # .dockerignore — CyberPixel SOC (Trabalho 02)
-# Otimização do Contexto de Build e Segurança de Imagem (Princípio do Menor Privilégio)
+# Otimização do Contexto de Build e Segurança de Imagem 
 # ==============================================================================
 
 # Controle de versão e metadados Git
@@ -43,5 +43,6 @@ README.md
 
 # Arquivos residuais do sistema operacional
 .DS_Store
-Thumbs.db
+Thumbs.db"
 *.tmp
+"
