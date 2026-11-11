@@ -30,7 +30,7 @@ class Equipamento(ABC):
 
     @abstractmethod
     def fator_exposicao(self):
-        return 0.8
+        return 1.0
 
     def calcular_risco(self, risco_base=None):
         if risco_base is None:
