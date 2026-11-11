@@ -1,0 +1,24 @@
+name: trab02_2026_2_12621cbs214
+
+services:
+  soc_cyberpixel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: trab02_2026_2_12621cbs214:latest
+    container_name: trab02_2026_2_12621cbs214
+    restart: unless-stopped
+    ports:
+      - "${PORTA_EXTERNA:-2214}:8080"
+    volumes:
+      - ./inventario_db.json:/app/inventario_db.json
+    environment:
+      - DISPLAY=:0
+      - PYTHONUNBUFFERED=1
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
