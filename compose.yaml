@@ -8,7 +8,7 @@ services:
     image: trab02_2026_2_12621cbs214:latest
     container_name: trab02_2026_2_12621cbs214
     restart: unless-stopped
-    read_only: true
+    read_only: false
     tmpfs:
       - /tmp
     cap_drop:
