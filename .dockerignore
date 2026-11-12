@@ -1,48 +1,10 @@
-"# ==============================================================================
-# .dockerignore — CyberPixel SOC (Trabalho 02)
-# Otimização do Contexto de Build e Segurança de Imagem 
-# ==============================================================================
-
-# Controle de versão e metadados Git
 .git
-.gitignore
-
-# Ambientes virtuais locais
-.venv
-venv/
-ENV/
-env/
-
-# Bytecodes e caches do interpretador Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Arquivos de configuração de IDEs e editores
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# Variáveis de ambiente e segredos locais
 .env
-.env.*
-*.pem
-*.key
-
-# Mídias e demonstrações gráficas pesadas 
-assets/*.gif
-*.mp4
-
-# Documentação estática 
-README.md
-
-# Arquivos residuais do sistema operacional
-.DS_Store
-Thumbs.db"
-*.tmp
-"
+*.zip
+*.docx
+*.md
+logs/
+dados/
+__pycache__/
+**/*.pyc
+.pytest_cache/

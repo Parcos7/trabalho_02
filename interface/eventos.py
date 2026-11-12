@@ -19,6 +19,11 @@ from interface.configuracoes import (
 # ==========================================
 class ProcessadorEventos:
     def tratar_clique(self, pos_mouse):
+        if getattr(self, "rect_btn_logout_hud", None) and self.rect_btn_logout_hud.collidepoint(pos_mouse):
+            self.acao_saida = "LOGOUT"
+            self.rodando = False
+            return
+
         if self.modal_ativo:
             rect_modal = pygame.Rect(250, 60, LARGURA_TELA - 500, ALTURA_TELA - 120)
             rect_fechar = pygame.Rect(rect_modal.right - 48, rect_modal.y + 16, 32, 32)
@@ -383,7 +388,9 @@ class ProcessadorEventos:
         self._processar_busca_nvd()
 
         for evento in pygame.event.get():
-            if evento.type == pygame.QUIT: self.rodando = False
+            if evento.type == pygame.QUIT:
+                self.acao_saida = "DESLIGAR"
+                self.rodando = False
             
             if evento.type == pygame.MOUSEWHEEL:
                 if self.modal_ativo == "DASHBOARD_TELAO":

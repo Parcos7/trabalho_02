@@ -4,7 +4,7 @@
 # Identificador do Projeto: trab02_2026_2_12621cbs214
 # ==============================================================================
 
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 LABEL maintainer="12621CBS214"
 LABEL project="trab02_2026_2_12621cbs214"
@@ -14,6 +14,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DISPLAY=:0
 
+# Instalacao dos pacotes necessarios para Xvfb, VNC e noVNC
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     x11vnc \
@@ -21,13 +22,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     websockify \
     && rm -rf /var/lib/apt/lists/*
 
+RUN useradd --create-home --uid 1000 soc
+
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+
 WORKDIR /app
 
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app
+COPY --chown=soc:soc . /app
+
+RUN mkdir -p /app/logs /app/dados && chown -R soc:soc /app/logs /app/dados
+
+USER soc
 
 EXPOSE 8080
 
-CMD ["bash", "-c", "Xvfb :0 -screen 0 1280x720x24 -ac & sleep 1 && x11vnc -display :0 -nopw -forever -shared -bg && websockify --web /usr/share/novnc 8080 localhost:5900 & python main_game.py"]
+CMD ["bash", "-c", "mkdir -p /tmp/.X11-unix && Xvfb :0 -screen 0 1280x720x24 -ac & sleep 1 && x11vnc -display :0 -passwd \"$VNC_PASSWORD\" -localhost -forever -shared -bg && websockify --web /usr/share/novnc 8080 localhost:5900 & sleep 1 && python main_game.py"]

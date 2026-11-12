@@ -26,6 +26,13 @@ COR_VERMELHO_NEON = (255, 0, 0)        # Interface Padrão
 COR_PAINEL = (0, 0, 0)
 COR_PAINEL_BORDA = (0, 255, 0)
 
+# --- PALETA DO CYBERPIXEL OS (PRETO E VERDE) ---
+COR_OS_FUNDO = (0, 0, 0)          # #000000
+COR_OS_VERDE = (0, 255, 65)       # #00FF41
+COR_OS_VERDE_ESCURO = (10, 95, 31) # #0A5F1F
+COR_OS_PAINEL = (8, 20, 12)
+COR_OS_TEXTO_MUTED = (0, 160, 45)
+
 DESCRICOES_DIDATICAS_VULN = {
     "senha fraca": (
         "O aparelho usa uma senha muito simples ou fácil de adivinhar. "

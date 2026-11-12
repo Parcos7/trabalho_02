@@ -1,0 +1,26 @@
+{
+    "soc": {
+        "usuario": "soc",
+        "nome": "Operador SOC",
+        "perfil": "admin",
+        "salt": "b78b1e9c1eed7f9f62d5c6d24c7534fc",
+        "hash": "6d50fe1cdc2ec8fe11b39ef56b6feb1f829c6a49d0b69b24023706c3edf3ff38",
+        "senha_temporaria": false
+    },
+    "convidado": {
+        "usuario": "convidado",
+        "nome": "Usuário Convidado",
+        "perfil": "convidado",
+        "salt": "95c1ec8225bd128a87f5fb9ec768a407",
+        "hash": "a6cb970f836b75f799a440598a93757550c7b77a27839708a11859ec409ae741",
+        "senha_temporaria": false
+    },
+    "ana": {
+        "usuario": "ana",
+        "nome": "Ana",
+        "perfil": "comum",
+        "salt": "dc3fe6fc7cedb093f626fc9ebcb9df6d",
+        "hash": "f6826d164b4c43d47feed053109eed83db58007caaadbd1cb649cc6a7e851a15",
+        "senha_temporaria": false
+    }
+}

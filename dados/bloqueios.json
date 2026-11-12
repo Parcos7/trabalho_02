@@ -1,0 +1,10 @@
+{
+    "login": {
+        "falhas": 0,
+        "bloqueado_ate": 0.0
+    },
+    "sudo": {
+        "falhas": 0,
+        "bloqueado_ate": 0.0
+    }
+}

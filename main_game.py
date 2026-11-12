@@ -24,7 +24,7 @@ class App(GerenciadorEstado, ProcessadorEventos, RenderizadorGrafico):
         self.rects_vulns_servidor = []
         self.descricao_expandida = False
 
-        self.tela = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA))
+        self.tela = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA), pygame.SCALED)
         pygame.display.set_caption(TITULO_JANELA)
         pygame.mouse.set_visible(False)
         self.relogio = pygame.time.Clock()
@@ -38,6 +38,7 @@ class App(GerenciadorEstado, ProcessadorEventos, RenderizadorGrafico):
         self.rect_servidor = pygame.Rect(1020, 160, 200, 480)
         self.rect_workstation = pygame.Rect(140, 400, 190, 160)
         self.rect_telao = pygame.Rect(430, 90, 420, 200)
+        self.rect_btn_logout_hud = pygame.Rect(LARGURA_TELA - 155, 6, 140, 24)
 
         self.modal_ativo = None          
         self.objeto_em_hover = None      
@@ -149,9 +150,50 @@ class App(GerenciadorEstado, ProcessadorEventos, RenderizadorGrafico):
             self.desenhar_cursor()
             pygame.display.flip()
             self.relogio.tick(FPS)
-        pygame.quit()
-        sys.exit()
+        return getattr(self, "acao_saida", "LOGOUT")
+
+def main():
+    from interface.tela_login import executar_tela_login
+    from interface.area_trabalho import AreaTrabalho
+
+    pygame.init()
+    tela = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA), pygame.SCALED)
+    pygame.display.set_caption(TITULO_JANELA)
+    relogio = pygame.time.Clock()
+
+    while True:
+        pygame.mouse.set_visible(True)
+        usuario_logado, acao = executar_tela_login(tela, relogio)
+
+        if acao == "DESLIGAR" or not usuario_logado:
+            break
+
+        # Primeiro acesso com senha temporária exige troca antes de liberar o ambiente
+        if usuario_logado.get("senha_temporaria"):
+            from interface.tela_troca_senha import executar_tela_troca_senha
+            usuario_logado, acao_troca = executar_tela_troca_senha(
+                tela, relogio, usuario_logado, usuario_logado.get("_senha_digitada", "")
+            )
+            if acao_troca != "LOGIN" or not usuario_logado:
+                continue
+
+        perfil = usuario_logado.get("perfil", "convidado")
+
+        if perfil == "admin":
+            # Perfil Administrador ('soc'): Inicializa e executa o SOC existente
+            app = App()
+            acao_soc = app.executar()
+            if acao_soc == "DESLIGAR":
+                break
+        else:
+            # Perfil Comum ('convidado'): Executa a Área de Trabalho isolada
+            desktop = AreaTrabalho(usuario_logado)
+            acao_desk = desktop.executar(tela, relogio)
+            if acao_desk == "DESLIGAR":
+                break
+
+    pygame.quit()
+    sys.exit()
 
 if __name__ == "__main__":
-    app = App()
-    app.executar()
+    main()

@@ -246,7 +246,16 @@ class RenderizadorGrafico:
         img_resumo = self.fonte_p.render(resumo_hud, True, cor_linha_topo)
         self.tela.blit(img_resumo, (LARGURA_TELA // 2 - img_resumo.get_width() // 2, 11))
         img_hora = self.fonte_p.render(f"HORA: {hora_hud}", True, COR_AMBAR)
-        self.tela.blit(img_hora, (LARGURA_TELA - img_hora.get_width() - 18, 11))
+        self.tela.blit(img_hora, (LARGURA_TELA - img_hora.get_width() - 170, 11))
+
+        # Botão Encerrar Sessão no Top HUD
+        self.rect_btn_logout_hud = pygame.Rect(LARGURA_TELA - 155, 6, 140, 24)
+        pos_mouse = pygame.mouse.get_pos()
+        hover_logout = self.rect_btn_logout_hud.collidepoint(pos_mouse)
+        cor_btn_log = (160, 35, 35) if hover_logout else (25, 40, 60)
+        pygame.draw.rect(self.tela, cor_btn_log, self.rect_btn_logout_hud, border_radius=3)
+        pygame.draw.rect(self.tela, COR_AMBAR if hover_logout else (60, 90, 130), self.rect_btn_logout_hud, 1, border_radius=3)
+        self.tela.blit(self.fonte_p.render("[ Encerrar Sessao ]", True, (255, 255, 255)), (self.rect_btn_logout_hud.x + 8, self.rect_btn_logout_hud.y + 4))
 
     def desenhar_modais(self):
         if not self.modal_ativo: return

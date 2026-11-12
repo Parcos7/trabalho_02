@@ -8,13 +8,23 @@ services:
     image: trab02_2026_2_12621cbs214:latest
     container_name: trab02_2026_2_12621cbs214
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    pids_limit: 100
+    mem_limit: 1g
     ports:
       - "${PORTA_EXTERNA:-2214}:8080"
     volumes:
       - ./inventario_db.json:/app/inventario_db.json
+      - ./logs:/app/logs
+      - ./dados:/app/dados
     environment:
       - DISPLAY=:0
       - PYTHONUNBUFFERED=1
+      - VNC_PASSWORD=${VNC_PASSWORD:?defina VNC_PASSWORD no arquivo .env}
     security_opt:
       - no-new-privileges:true
     logging:

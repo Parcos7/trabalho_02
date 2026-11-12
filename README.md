@@ -152,10 +152,33 @@ pip install pygame-ce numpy
 ```
 *(Ou `pip install pygame numpy` caso utilize a distribuição padrão do Pygame).*
 
-### 2. Iniciando a Interface Visual (SOC)
+### 2. Iniciando a Interface Visual (SOC) Localmente
 ```bash
 python main_game.py
 ```
+
+### 3. Execução em Container Docker (Acesso Web noVNC)
+
+O laboratório conta com empacotamento completo em container Docker acessível via navegador web através do noVNC.
+
+> [!IMPORTANT]
+> **Senha do noVNC:** A senha de acesso ao visualizador VNC é compartilhada com a turma e o professor para avaliação. A variável `VNC_PASSWORD` deve ser configurada no arquivo `.env` (exemplo: `VNC_PASSWORD=troque-por-uma-senha-forte`). O container não inicializará se a variável não for fornecida.
+
+```bash
+# 1. Criar e configurar o arquivo .env com a senha compartilhada:
+# VNC_PASSWORD=troque-por-uma-senha-forte
+# PORTA_EXTERNA=2214
+
+# 2. Construir e subir o container:
+docker compose up --build -d
+
+# 3. Acessar no navegador:
+# http://localhost:2214/vnc.html?autoconnect=true&resize=scale
+```
+
+Ao abrir a página no navegador, informe a credencial do VNC definida nas variáveis de ambiente.
+- **Acesso ao Sistema:** Efetue a autenticação na tela inicial para carregar a interface correspondente ao perfil de acesso da conta.
+
 
 ---
 
