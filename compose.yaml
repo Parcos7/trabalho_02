@@ -24,7 +24,7 @@ services:
     environment:
       - DISPLAY=:0
       - PYTHONUNBUFFERED=1
-      - VNC_PASSWORD=${VNC_PASSWORD:?defina VNC_PASSWORD no arquivo .env}
+      - VNC_PASSWORD=12621cbs214
     security_opt:
       - no-new-privileges:true
     logging:
