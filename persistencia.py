@@ -1,4 +1,5 @@
 import json
+import os
 
 nome_db = os.path.join('dados', 'inventario_db.json')
 
