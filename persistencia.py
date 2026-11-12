@@ -1,6 +1,6 @@
 import json
 
-nome_db = 'inventario_db.json'
+nome_db = os.path.join('dados', 'inventario_db.json')
 
 def ler_db():
     try:
