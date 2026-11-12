@@ -172,8 +172,8 @@ O laboratório conta com empacotamento completo em container Docker acessível v
 # 2. Construir e subir o container:
 docker compose up --build -d
 
-# 3. Acessar no navegador:
-# http://localhost:2214/vnc.html?autoconnect=true&resize=scale
+# 3. Acessar diretamente no navegador:
+# http://localhost:2214 (ou http://<IP_DO_DOCKER>:2214)
 ```
 
 Ao abrir a página no navegador, informe a credencial do VNC definida nas variáveis de ambiente.
