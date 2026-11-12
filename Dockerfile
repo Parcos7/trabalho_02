@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     websockify \
     && rm -rf /var/lib/apt/lists/*
 
-RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale"><script>window.location.replace("vnc.html?autoconnect=true&resize=scale");</script></head><body></body></html>' >
+RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale"><script>window.location.replace("vnc.html?autoconnect=true&resize=scale");</script></head><body></body></html>' > /usr/share/novnc/index.html
 
 RUN useradd --create-home --uid 1000 soc
 
