@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Assistente de Inicialização e Configuração de Credenciais.
-Projeto CyberPixel SOC - Bacharelado em Cibersegurança (UFU)
-"""
-
 import getpass
 from sistema.usuarios import (
     gerar_hash_senha,
@@ -16,7 +10,6 @@ from sistema.usuarios import (
 
 
 def configurar_usuarios_padrao():
-    """Configura as senhas de soc e convidado sem exibir texto na tela."""
     print("\n--- Configuração de Usuários do Sistema ---")
     
     # 1. Usuário SOC (Admin)
@@ -69,7 +62,6 @@ def configurar_usuarios_padrao():
 
 
 def configurar_senha_sudo():
-    """Define a senha administrativa do comando sudo sem exibir texto na tela."""
     print("\n--- Configuração da Senha do SUDO ---")
     senha_sudo = ""
     while not senha_sudo:

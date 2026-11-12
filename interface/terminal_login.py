@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Terminal Emulado de Administração e Gerenciamento do CyberPixel OS.
-Projeto CyberPixel SOC - Bacharelado em Cibersegurança (UFU)
-"""
-
 import pygame
 from interface.configuracoes import LARGURA_TELA, ALTURA_TELA, FPS, COR_OS_FUNDO, COR_OS_VERDE
 from sistema.usuarios import (
@@ -16,10 +10,6 @@ from sistema.usuarios import (
 
 
 def executar_terminal(tela, relogio):
-    """
-    Executa a interface de linha de comando simulada para logon e administração.
-    Retorna: (dados_usuario_autenticado, 'LOGIN') ou (None, 'FECHAR') ou (None, 'DESLIGAR').
-    """
     pygame.key.set_repeat(250, 40)
     fonte_terminal = pygame.font.SysFont("Consolas, Courier New, monospace", 16)
 

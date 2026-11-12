@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Tela de Troca Obrigatória de Senha no Primeiro Login.
-Projeto CyberPixel SOC - Bacharelado em Cibersegurança (UFU)
-"""
-
 import pygame
 from interface.configuracoes import (
     LARGURA_TELA,
@@ -19,10 +13,6 @@ from sistema.usuarios import validar_politica_senha, atualizar_senha_usuario, ca
 
 
 def executar_tela_troca_senha(tela, relogio, dados_usuario, senha_temporaria=""):
-    """
-    Exibe a interface gráfica para definição de senha definitiva.
-    Retorna: (dados_usuario_atualizados, 'LOGIN') ou (None, 'CANCELAR').
-    """
     pygame.key.set_repeat(250, 40)
 
     fonte_titulo = pygame.font.SysFont("Trebuchet MS, Arial", 22, bold=True)

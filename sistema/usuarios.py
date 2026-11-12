@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Módulo de Gerenciamento de Usuários, Credenciais e Políticas de Segurança.
-Projeto CyberPixel SOC - Bacharelado em Cibersegurança (UFU)
-"""
-
 import os
 import json
 import hashlib
@@ -72,7 +66,6 @@ def verificar_senha(senha_digitada, salt_hex, hash_esperado_hex):
 # ==============================================================================
 
 def carregar_bloqueios():
-    """Carrega estado persistente de bloqueios de dados/bloqueios.json."""
     _garantir_diretorios()
     padrao = {
         "login": {"falhas": 0, "bloqueado_ate": 0.0},
@@ -102,14 +95,12 @@ def salvar_bloqueios(bloqueios):
 
 
 def esta_bloqueado(tipo="login"):
-    """Informa se o login ou sudo está temporariamente bloqueado."""
     bloqueios = carregar_bloqueios()
     info = bloqueios.get(tipo, {})
     return time.time() < info.get("bloqueado_ate", 0.0)
 
 
 def tempo_restante_bloqueio(tipo="login"):
-    """Retorna quantos segundos faltam para liberar o login ou sudo."""
     bloqueios = carregar_bloqueios()
     info = bloqueios.get(tipo, {})
     restante = int(info.get("bloqueado_ate", 0.0) - time.time())
@@ -117,7 +108,6 @@ def tempo_restante_bloqueio(tipo="login"):
 
 
 def registrar_tentativa_falha(tipo="login", alvo=""):
-    """Registra falha consecutiva e aplica bloqueio de 30s após 3 erros."""
     bloqueios = carregar_bloqueios()
     info = bloqueios.get(tipo, {"falhas": 0, "bloqueado_ate": 0.0})
     info["falhas"] = info.get("falhas", 0) + 1
@@ -148,7 +138,6 @@ def registrar_tentativa_falha(tipo="login", alvo=""):
 
 
 def limpar_falhas(tipo="login"):
-    """Zera o contador de falhas e remove o bloqueio do tipo especificado."""
     bloqueios = carregar_bloqueios()
     bloqueios[tipo] = {"falhas": 0, "bloqueado_ate": 0.0}
     salvar_bloqueios(bloqueios)
@@ -159,7 +148,6 @@ def limpar_falhas(tipo="login"):
 # ==============================================================================
 
 def carregar_usuarios():
-    """Carrega o dicionário de usuários a partir de dados/usuarios.json."""
     _garantir_diretorios()
     if not os.path.exists(CAMINHO_DADOS):
         return {}
@@ -171,14 +159,12 @@ def carregar_usuarios():
 
 
 def salvar_usuarios(usuarios):
-    """Grava o dicionário de usuários em dados/usuarios.json."""
     _garantir_diretorios()
     with open(CAMINHO_DADOS, "w", encoding="utf-8") as arq:
         json.dump(usuarios, arq, indent=4, ensure_ascii=False)
 
 
 def carregar_sudo():
-    """Carrega as credenciais de hash do sudo a partir de dados/sudo.json."""
     _garantir_diretorios()
     if not os.path.exists(CAMINHO_SUDO):
         return {}
@@ -190,7 +176,6 @@ def carregar_sudo():
 
 
 def definir_senha_sudo(nova_senha):
-    """Gera hash seguro e salva a senha do sudo em dados/sudo.json."""
     _garantir_diretorios()
     salt_hex, hash_hex = gerar_hash_senha(nova_senha)
     dados = {
@@ -205,10 +190,6 @@ def definir_senha_sudo(nova_senha):
 
 
 def verificar_senha_sudo(senha_digitada):
-    """
-    Valida a senha do comando sudo respeitando bloqueio de 30s após 3 erros.
-    Retorna: (sucesso: bool, mensagem: str, segundos_restantes: int)
-    """
     if esta_bloqueado("sudo"):
         restante = tempo_restante_bloqueio("sudo")
         return False, f"sudo bloqueado. Aguarde {restante} s.", restante
@@ -232,10 +213,6 @@ def verificar_senha_sudo(senha_digitada):
 
 
 def tentar_login(usuario, senha_digitada):
-    """
-    Valida login de usuário respeitando bloqueio de 30s após 3 erros.
-    Retorna: (sucesso: bool, dados_ou_mensagem, segundos_restantes: int)
-    """
     if esta_bloqueado("login"):
         restante = tempo_restante_bloqueio("login")
         return False, f"Acesso bloqueado. Aguarde {restante} s.", restante
@@ -269,17 +246,6 @@ def tentar_login(usuario, senha_digitada):
 # ==============================================================================
 
 def validar_politica_senha(senha, usuario="", senha_anterior=""):
-    """
-    Valida se a senha atende aos requisitos de complexidade:
-    - Mínimo de 10 caracteres
-    - Pelo menos uma letra maiúscula
-    - Pelo menos uma letra minúscula
-    - Pelo menos um número
-    - Pelo menos um símbolo especial
-    - Diferente da senha anterior
-    - Não conter o nome de usuário
-    Retorna: (valido: bool, pendencias: list[str])
-    """
     pendencias = []
 
     if len(senha) < 10:
@@ -303,7 +269,6 @@ def validar_politica_senha(senha, usuario="", senha_anterior=""):
 
 
 def gerar_senha_temporaria():
-    """Gera senha temporária aleatória de 16 caracteres com maiúscula, minúscula, número e símbolo."""
     maiusculas = string.ascii_uppercase
     minusculas = string.ascii_lowercase
     digitos = string.digits
@@ -325,10 +290,6 @@ def gerar_senha_temporaria():
 
 
 def criar_usuario_sudo(nome_usuario):
-    """
-    Cria um novo usuário comum a partir do comando 'sudo criar_usuario <nome>'.
-    Retorna: (sucesso: bool, senha_temporaria: str, mensagem: str)
-    """
     nome_norm = str(nome_usuario).strip().lower()
 
     if len(nome_norm) < 3 or len(nome_norm) > 16:
